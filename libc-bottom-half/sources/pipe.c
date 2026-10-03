@@ -493,6 +493,10 @@ static descriptor_vtable_t pipe_vtable = {
 
 #endif // !__wasip1__ && !__wasip2__
 
+#ifdef __wasip1__
+#include <browseros/host.h>
+#endif
+
 int pipe(int fd[2]) { return pipe2(fd, 0); }
 
 int pipe2(int fd[2], int flags) {
@@ -500,7 +504,19 @@ int pipe2(int fd[2], int flags) {
     errno = EINVAL;
     return -1;
   }
-#if defined(__wasip1__) || defined(__wasip2__)
+#if defined(__wasip1__)
+  // BrowserOS: パイプはカーネルの開いたファイルの表にある（64KiB・EOF・EPIPE は pipe(7) と同じ）。
+  // O_CLOEXEC は 0（exec の無い WASI では意味を持たない）
+  int32_t fds[2];
+  int32_t error = __browseros_pipe2(fds, flags & O_NONBLOCK);
+  if (error != 0) {
+    errno = error;
+    return -1;
+  }
+  fd[0] = fds[0];
+  fd[1] = fds[1];
+  return 0;
+#elif defined(__wasip2__)
   (void)fd;
   errno = ENOTSUP;
   return -1;
