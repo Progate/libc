@@ -15,6 +15,8 @@
 #include <string.h>
 #ifdef __wasip1__
 #include <browseros/host.h>
+#include <browseros/libc.h>
+#include <stdarg.h>
 #endif
 
 static int find_relpath2(const char *path, char **relative,
@@ -50,9 +52,27 @@ static int find_relpath_alt(const char *path, char **relative) {
 }
 
 int open(const char *path, int oflag, ...) {
+#ifdef __wasilibc_browseros
+  // BrowserOS: 作るときの mode を活かす（→ browseros/create.c）
+  mode_t mode = 0;
+  if (oflag & O_CREAT) {
+    va_list ap;
+    va_start(ap, oflag);
+    mode = va_arg(ap, mode_t);
+    va_end(ap);
+  }
+  char *relative_path;
+  int dirfd = find_relpath(path, &relative_path);
+  if (dirfd == -1) {
+    errno = ENOENT;
+    return -1;
+  }
+  return __browseros_nocwd_openat(dirfd, relative_path, oflag, mode);
+#else
   // WASI libc's `openat` ignores the mode argument, so call a special
   // entrypoint which avoids the varargs calling convention.
   return __wasilibc_open_nomode(path, oflag);
+#endif
 }
 
 // See the documentation in libc.h
@@ -216,7 +236,9 @@ int remove(const char *path) {
 }
 
 int mkdir(const char *path, mode_t mode) {
+#ifndef __wasilibc_browseros
   (void)mode;
+#endif
   char *relative_path;
   int dirfd = find_relpath(path, &relative_path);
 
@@ -226,7 +248,11 @@ int mkdir(const char *path, mode_t mode) {
     return -1;
   }
 
+#ifdef __wasilibc_browseros
+  return __browseros_nocwd_mkdirat(dirfd, relative_path, mode);
+#else
   return __wasilibc_nocwd_mkdirat_nomode(dirfd, relative_path);
+#endif
 }
 
 DIR *opendir(const char *dirname) {

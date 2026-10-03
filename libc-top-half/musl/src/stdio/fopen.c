@@ -27,7 +27,12 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
 	fd = sys_open(filename, flags, 0666);
 #else
 	// WASI libc ignores the mode parameter anyway, so skip the varargs.
+#ifdef __wasilibc_browseros
+	/* BrowserOS: musl と同じく 0666 で作り、umask を当てる */
+	fd = open(filename, flags, 0666);
+#else
 	fd = __wasilibc_open_nomode(filename, flags);
+#endif
 #endif
 	if (fd < 0) return 0;
 #ifdef __wasilibc_unmodified_upstream // WASI has no syscall

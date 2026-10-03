@@ -7,6 +7,10 @@
 // function, which then calls the appropriate WASI function.
 
 #include <dirent.h>
+#ifdef __wasilibc_browseros
+#include <browseros/libc.h>
+#include <stdarg.h>
+#endif
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -21,11 +25,26 @@
 #endif
 
 int openat(int dirfd, const char *pathname, int flags, ...) {
+#ifdef __wasilibc_browseros
+  // BrowserOS: 作るときの mode を活かす（→ browseros/create.c）
+  mode_t mode = 0;
+  if (flags & O_CREAT) {
+    va_list ap;
+    va_start(ap, flags);
+    mode = va_arg(ap, mode_t);
+    va_end(ap);
+  }
+  if (dirfd == AT_FDCWD || pathname[0] == '/') {
+    return open(pathname, flags, mode);
+  }
+  return __browseros_nocwd_openat(dirfd, pathname, flags, mode);
+#else
   if (dirfd == AT_FDCWD || pathname[0] == '/') {
     return open(pathname, flags);
   }
 
   return __wasilibc_nocwd_openat_nomode(dirfd, pathname, flags);
+#endif
 }
 
 int symlinkat(const char *target, int dirfd, const char *linkpath) {
@@ -50,7 +69,11 @@ int mkdirat(int dirfd, const char *pathname, mode_t mode) {
     return mkdir(pathname, mode);
   }
 
+#ifdef __wasilibc_browseros
+  return __browseros_nocwd_mkdirat(dirfd, pathname, mode);
+#else
   return __wasilibc_nocwd_mkdirat_nomode(dirfd, pathname);
+#endif
 }
 
 DIR *opendirat(int dirfd, const char *path) {
