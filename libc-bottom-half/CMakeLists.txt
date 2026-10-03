@@ -148,9 +148,11 @@ if (WASI STREQUAL "p1")
     sources/browseros/clocks.c
     sources/browseros/create.c
     sources/browseros/flock.c
+    sources/browseros/popen.c
     sources/browseros/process.c
     sources/browseros/signal.c
     sources/browseros/spawn.c
+    sources/browseros/temp.c
     sources/browseros/wait.c
   )
 else()

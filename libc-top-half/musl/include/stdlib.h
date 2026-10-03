@@ -100,7 +100,7 @@ size_t __ctype_get_mb_cur_max(void);
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no wait */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #define WNOHANG    1
 #define WUNTRACED  2
 
@@ -115,7 +115,7 @@ size_t __ctype_get_mb_cur_max(void);
 int posix_memalign (void **, size_t, size_t);
 int setenv (const char *, const char *, int);
 int unsetenv (const char *);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no temp directories */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 int mkstemp (char *);
 int mkostemp (char *, int);
 char *mkdtemp (char *);
@@ -156,7 +156,7 @@ void lcong48 (unsigned short [7]);
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 #include <alloca.h>
-#ifdef __wasilibc_unmodified_upstream /* WASI has no temp directories */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 char *mktemp (char *);
 int mkstemps (char *, int);
 int mkostemps (char *, int, int);
@@ -167,7 +167,7 @@ void *memalign(size_t, size_t);
 int getloadavg(double *, int);
 #endif
 int clearenv(void);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no wait */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #define WCOREDUMP(s) ((s) & 0x80)
 #define WIFCONTINUED(s) ((s) == 0xffff)
 void *reallocarray (void *, size_t, size_t);
@@ -189,7 +189,7 @@ double strtod_l(const char *__restrict, char **__restrict, struct __locale_struc
 long double strtold_l(const char *__restrict, char **__restrict, struct __locale_struct *);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no temp directories */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #if defined(_LARGEFILE64_SOURCE)
 #define mkstemp64 mkstemp
 #define mkostemp64 mkostemp

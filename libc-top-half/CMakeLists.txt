@@ -458,7 +458,8 @@ if (NOT (WASI STREQUAL "p1"))
 endif()
 
 # BrowserOS の libc（p1）はシグナルを libc 本体に持つ。集合の操作や sigset・sighold は musl のものが
-# sigaction / sigprocmask の上にそのまま載る（→ libc-bottom-half/sources/browseros/signal.c）
+# sigaction / sigprocmask の上にそのまま載る（→ libc-bottom-half/sources/browseros/signal.c）。
+# mkstemp などの一時ファイルも、open(O_CREAT) が mode を活かすようになったので musl のものを使う
 if (WASI STREQUAL "p1")
   list(APPEND top_half_sources
     musl/src/signal/killpg.c
@@ -481,6 +482,13 @@ if (WASI STREQUAL "p1")
     musl/src/signal/sigrtmin.c
     musl/src/signal/sigset.c
     musl/src/string/strsignal.c
+    musl/src/temp/__randname.c
+    musl/src/temp/mkdtemp.c
+    musl/src/temp/mkostemp.c
+    musl/src/temp/mkostemps.c
+    musl/src/temp/mkstemp.c
+    musl/src/temp/mkstemps.c
+    musl/src/temp/mktemp.c
   )
 endif()
 

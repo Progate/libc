@@ -61,7 +61,7 @@ extern "C" {
 #define BUFSIZ 1024
 #define FILENAME_MAX 4096
 #define FOPEN_MAX 1000
-#ifdef __wasilibc_unmodified_upstream /* WASI has no temp directories */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #define TMP_MAX 10000
 #define L_tmpnam 20
 #endif
@@ -145,7 +145,7 @@ void perror(const char *);
 int setvbuf(FILE *__restrict, char *__restrict, int, size_t);
 void setbuf(FILE *__restrict, char *__restrict);
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no temp directories */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 char *tmpnam(char *);
 FILE *tmpfile(void);
 #else
@@ -159,7 +159,7 @@ FILE *tmpfile(void) __attribute__((__deprecated__("tmpfile is not defined on WAS
 FILE *fmemopen(void *__restrict, size_t, const char *__restrict);
 FILE *open_memstream(char **, size_t *);
 FILE *fdopen(int, const char *);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no popen */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 FILE *popen(const char *, const char *);
 int pclose(FILE *);
 #endif
@@ -190,7 +190,7 @@ char *ctermid(char *);
 int renameat2(int, const char *, int, const char *, unsigned);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no temp directories */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
 #define P_tmpdir "/tmp"
@@ -239,7 +239,7 @@ FILE *fopencookie(void *, const char *, cookie_io_functions_t);
 #endif
 
 #if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
-#ifdef __wasilibc_unmodified_upstream /* WASI has no temp directories */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #define tmpfile64 tmpfile
 #endif
 #define fopen64 fopen
