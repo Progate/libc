@@ -10,6 +10,10 @@
 #include <stdio.h>
 #include <wasi/api.h>
 
+#ifdef __wasip1__
+#include <browseros/host.h>
+#endif
+
 #ifndef __wasip1__
 #include <stddefer.h>
 #include <wasi/file_utils.h>
@@ -25,15 +29,21 @@ int __wasilibc_nocwd_fstatat(int fd, const char *restrict path, struct stat *res
   if ((flag & AT_SYMLINK_NOFOLLOW) == 0)
       lookup_flags |= __WASI_LOOKUPFLAGS_SYMLINK_FOLLOW;
 
-  // Perform system call.
+  // BrowserOS: filestat と権限のビットをカーネルに 1 度で聞く（→ fstat.c）。この FS にシンボリックリンクは無いので、
+  // lookup_flags（AT_SYMLINK_NOFOLLOW）で答えは変わらない
   __wasi_filestat_t internal_stat;
-  __wasi_errno_t error =
-      __wasi_path_filestat_get(fd, lookup_flags, path, &internal_stat);
+  uint32_t mode;
+  int32_t error = __browseros_stat_at(fd, path, strlen(path), &internal_stat, &mode);
+  int has_mode = error == 0;
+  if (error == __WASI_ERRNO_NOTSUP || error == __WASI_ERRNO_NOSYS)
+    error = __wasi_path_filestat_get(fd, lookup_flags, path, &internal_stat);
   if (error != 0) {
       errno = error;
       return -1;
   }
   to_public_stat(&internal_stat, buf);
+  if (has_mode)
+    buf->st_mode = mode;
 
   return 0;
 #elif defined(__wasip2__) || defined(__wasip3__)

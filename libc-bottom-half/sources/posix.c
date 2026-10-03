@@ -12,6 +12,10 @@
 #include <wasi/libc-find-relpath.h>
 #include <wasi/libc-nocwd.h>
 #include <wasi/libc.h>
+#include <string.h>
+#ifdef __wasip1__
+#include <browseros/host.h>
+#endif
 
 static int find_relpath2(const char *path, char **relative,
                          size_t *relative_len) {
@@ -303,6 +307,51 @@ int rename(const char *old, const char *new) {
   return -1;
 }
 
+#ifdef __wasip1__
+// BrowserOS: 権限はこの OS の FS が持っている（→ browseros/host.h）。WASI に chmod は無いので、ホスト関数で変える
+
+int chmod(const char *path, mode_t mode) {
+  char *relative_path;
+  int dirfd = find_relpath(path, &relative_path);
+
+  // If we can't find a preopen for it, fail as if we can't find the path.
+  if (dirfd == -1) {
+    errno = ENOENT;
+    return -1;
+  }
+
+  int32_t error = __browseros_chmod_at(dirfd, relative_path, strlen(relative_path), mode);
+  if (error != 0) {
+    errno = error;
+    return -1;
+  }
+  return 0;
+}
+
+int fchmod(int fd, mode_t mode) {
+  int32_t error = __browseros_fchmod(fd, mode);
+  if (error != 0) {
+    errno = error;
+    return -1;
+  }
+  return 0;
+}
+
+int fchmodat(int fd, const char *path, mode_t mode, int flag) {
+  // シンボリックリンクを持たない FS なので、AT_SYMLINK_NOFOLLOW でも同じものを変える
+  (void)flag;
+  if (fd == AT_FDCWD || path[0] == '/')
+    return chmod(path, mode);
+  int32_t error = __browseros_chmod_at(fd, path, strlen(path), mode);
+  if (error != 0) {
+    errno = error;
+    return -1;
+  }
+  return 0;
+}
+
+#else
+
 int chmod(const char *path, mode_t mode) {
   (void)path;
   (void)mode;
@@ -334,6 +383,8 @@ int fchmodat(int fd, const char *path, mode_t mode, int flag) {
   errno = ENOSYS;
   return -1;
 }
+
+#endif
 
 int statvfs(const char *__restrict path, struct statvfs *__restrict buf) {
   (void)path;
