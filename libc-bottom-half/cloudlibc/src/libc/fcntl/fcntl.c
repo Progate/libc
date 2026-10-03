@@ -7,6 +7,10 @@
 #include <fcntl.h>
 #include <stdarg.h>
 
+#ifdef __wasip1__
+#include <browseros/host.h>
+#endif
+
 #ifndef __wasip1__
 #include <stddefer.h>
 #include <wasi/file_utils.h>
@@ -22,6 +26,23 @@ int fcntl(int fildes, int cmd, ...) {
 #endif
 
   switch (cmd) {
+#if defined(__wasip1__)
+    case F_DUPFD:
+    case F_DUPFD_CLOEXEC: {
+      // BrowserOS: lowest 以上でいちばん小さい空き番号に複製する（→ browseros/host.h）
+      va_list ap;
+      va_start(ap, cmd);
+      int lowest = va_arg(ap, int);
+      va_end(ap);
+      int32_t newfd;
+      int32_t error = __browseros_dup(fildes, lowest, &newfd);
+      if (error != 0) {
+        errno = error;
+        return -1;
+      }
+      return newfd;
+    }
+#endif
     case F_GETFD:
       // Act as if the close-on-exec flag is always set.
       return FD_CLOEXEC;
