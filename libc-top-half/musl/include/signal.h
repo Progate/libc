@@ -317,7 +317,7 @@ void __SIG_IGN(int);
 #define SIG_IGN  (__SIG_IGN)
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* Make sig_atomic_t 64-bit on wasm64 */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 typedef int sig_atomic_t;
 #else
 typedef long sig_atomic_t;

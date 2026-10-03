@@ -56,6 +56,12 @@ __BROWSEROS_IMPORT("browser_os_process", "getpid")
 int32_t __browseros_getpid(int32_t *pid);
 __BROWSEROS_IMPORT("browser_os_process", "getppid")
 int32_t __browseros_getppid(int32_t *pid);
+/// いま無視しているシグナルと塞いでいるシグナル（シグナル n はビット n-1）を知らせる。posix_spawn の子へ継ぐ扱いはここから決まる
+__BROWSEROS_IMPORT("browser_os_process", "set_signals")
+int32_t __browseros_set_signals(uint64_t ignored, uint64_t blocked);
+/// このプロセスが始めるときに無視するシグナルと塞ぐシグナル（親の扱いと posix_spawn の attr からカーネルが決めたもの）
+__BROWSEROS_IMPORT("browser_os_process", "initial_signals")
+int32_t __browseros_initial_signals(uint64_t *ignored, uint64_t *blocked);
 /// 戻らない（シグナルの既定の動作で終わる）。ホストが渡していなければ ENOSYS で戻る
 __BROWSEROS_IMPORT("browser_os_process", "exit_signal")
 int32_t __browseros_exit_signal(int32_t signal);

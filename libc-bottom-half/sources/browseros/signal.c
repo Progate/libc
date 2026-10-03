@@ -7,6 +7,10 @@
 // 止める動作（SIGSTOP・SIGTSTP・SIGTTIN・SIGTTOU）は捨てる。この OS にジョブ制御は無く、どのプロセスも
 // 制御端末を持つセッションに属さないので、POSIX が「孤立したプロセスグループでは捨てる」と定める場合に当たる。
 //
+// 始めるときの扱いはカーネルが決めている（posix_spawn の子は、親が無視していたものを無視し、塞いでいたものを
+// 塞いだまま始まる）。起動時に読んで、動作の表とマスクの初期値にする。親の扱いは、posix_spawn の前に
+// __browseros_report_signals でカーネルへ知らせる（本物ではカーネルがもともと持っているもの）。
+//
 // 届くのはこのプロセスの中で起きたシグナル（raise・abort・kill(getpid())・読む端の無いパイプへの write の
 // SIGPIPE）である。他のプロセスからの kill(2) はカーネルが既定の動作で止める（→ browser-os の process/kernel.ts）。
 
@@ -15,6 +19,7 @@
 #include <browseros/libc.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -30,6 +35,43 @@ static _Thread_local sigset_t blocked;
 static _Thread_local sigset_t pending;
 
 void __SIG_IGN(int sig) { (void)sig; }
+
+/// u64（シグナル n はビット n-1）と sigset_t の先頭を行き来する。sigset_t の並びは musl と同じ（→ sigaddset.c）
+static uint64_t mask_of(const sigset_t *set) {
+  uint64_t mask = 0;
+  for (int sig = 1; sig < _NSIG; sig++)
+    if (sigismember(set, sig))
+      mask |= (uint64_t)1 << (sig - 1);
+  return mask;
+}
+
+static void set_of(uint64_t mask, sigset_t *set) {
+  sigemptyset(set);
+  for (int sig = 1; sig < _NSIG; sig++)
+    if (mask & ((uint64_t)1 << (sig - 1)))
+      sigaddset(set, sig);
+}
+
+// main より前（stdio が書き始めるより前）に読む。読めないホストでは既定の動作で、塞がずに始める
+__attribute__((constructor(10))) static void adopt_initial_signals(void) {
+  uint64_t ignored = 0, mask = 0;
+  if (__browseros_initial_signals(&ignored, &mask) != 0)
+    return;
+  for (int sig = 1; sig < _NSIG; sig++)
+    if (ignored & ((uint64_t)1 << (sig - 1)))
+      actions[sig].sa_handler = SIG_IGN;
+  set_of(mask, &blocked);
+}
+
+void __browseros_report_signals(void) {
+  // 捕まえているシグナルは子では既定に戻る（ハンドラは子に無い）。無視しているものだけを知らせる
+  sigset_t ignored;
+  sigemptyset(&ignored);
+  for (int sig = 1; sig < _NSIG; sig++)
+    if (actions[sig].sa_handler == SIG_IGN)
+      sigaddset(&ignored, sig);
+  __browseros_set_signals(mask_of(&ignored), mask_of(&blocked));
+}
 
 _Noreturn void __SIG_ERR(int sig) {
   (void)sig;

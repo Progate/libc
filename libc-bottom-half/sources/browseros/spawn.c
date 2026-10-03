@@ -367,6 +367,8 @@ static int spawn(pid_t *restrict pid, const char *restrict file,
   struct buffer actions = {0};
   int error = encode_actions(fa, cwd, &actions);
   free(cwd);
+  // 子へ継ぐシグナルの扱いはカーネルが親の扱いと attr から決める。呼んだスレッドのいまの扱いを先に知らせる
+  __browseros_report_signals();
   struct encoded_attr encoded = {0};
   if (attr) {
     encoded.flags = (uint16_t)attr->__flags;
