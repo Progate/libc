@@ -60,7 +60,7 @@ struct tm {
 #include <__header_time.h>
 #endif
 
-#if defined(__wasilibc_unmodified_upstream) || defined(_WASI_EMULATED_PROCESS_CLOCKS)
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) || defined(_WASI_EMULATED_PROCESS_CLOCKS)
 clock_t clock (void);
 #else
 __attribute__((__deprecated__(

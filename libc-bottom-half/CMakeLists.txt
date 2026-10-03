@@ -145,6 +145,7 @@ if (WASI STREQUAL "p1")
     cloudlibc/src/libc/sys/socket/send.c
     cloudlibc/src/libc/sys/socket/shutdown.c
     sources/accept-wasip1.c
+    sources/browseros/clocks.c
   )
 else()
   list(APPEND bottom_half_sources
