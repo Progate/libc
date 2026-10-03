@@ -5,6 +5,7 @@
 #include "stat_impl.h"
 #include <errno.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <wasi/api.h>
 #include <wasi/descriptor_table.h>
 
@@ -30,8 +31,12 @@ int fstat(int fildes, struct stat *buf) {
     return -1;
   }
   to_public_stat(&internal_stat, buf);
-  if (has_mode)
+  if (has_mode) {
+    // FS はファイルの持ち主を持たないので、すべて自分の持ち物に見せる（→ browseros/user.c）
     buf->st_mode = mode;
+    buf->st_uid = getuid();
+    buf->st_gid = getgid();
+  }
   return 0;
 #elif defined(__wasip2__) || defined(__wasip3__)
   // Translate the file descriptor to an internal handle

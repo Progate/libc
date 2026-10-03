@@ -520,6 +520,7 @@ cfsetospeed
 cfsetspeed
 chdir
 chmod
+chown
 cimag
 cimagf
 cimagl
@@ -621,6 +622,8 @@ fabsl
 faccessat
 fchmod
 fchmodat
+fchown
+fchownat
 fclose
 fcntl
 fcvt
@@ -752,8 +755,12 @@ getdate
 getdate_err
 getdelim
 getdomainname
+getegid
 getentropy
 getenv
+geteuid
+getgid
+getgroups
 gethostid
 gethostname
 getline
@@ -767,6 +774,7 @@ getrusage
 getsockopt
 getsubopt
 gettimeofday
+getuid
 getw
 getwc
 getwc_unlocked
@@ -876,6 +884,7 @@ kill
 killpg
 l64a
 labs
+lchown
 lcong48
 ldexp
 ldexpf

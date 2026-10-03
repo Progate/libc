@@ -154,6 +154,7 @@ if (WASI STREQUAL "p1")
     sources/browseros/spawn.c
     sources/browseros/temp.c
     sources/browseros/termios.c
+    sources/browseros/user.c
     sources/browseros/wait.c
   )
 else()

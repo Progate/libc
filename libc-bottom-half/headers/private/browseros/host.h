@@ -61,6 +61,9 @@ __BROWSEROS_IMPORT("browser_os_process", "wait")
 int32_t __browseros_wait(int32_t pid, int32_t options, int32_t *status, int32_t *child);
 __BROWSEROS_IMPORT("browser_os_process", "kill")
 int32_t __browseros_kill(int32_t pid, int32_t signal);
+// このプロセスの利用者とグループの番号（BrowserOS の id と同じ決め方）
+__BROWSEROS_IMPORT("browser_os_process", "credentials")
+int32_t __browseros_credentials(uint32_t *uid, uint32_t *gid);
 __BROWSEROS_IMPORT("browser_os_process", "getpid")
 int32_t __browseros_getpid(int32_t *pid);
 __BROWSEROS_IMPORT("browser_os_process", "getppid")

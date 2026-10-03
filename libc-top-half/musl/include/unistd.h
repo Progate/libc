@@ -89,7 +89,7 @@ ssize_t write(int, const void *, size_t);
 ssize_t pread(int, void *, size_t, off_t);
 ssize_t pwrite(int, const void *, size_t, off_t);
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no chown */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no chown */
 int chown(const char *, uid_t, gid_t);
 int fchown(int, uid_t, gid_t);
 int lchown(const char *, uid_t, gid_t);
@@ -175,12 +175,14 @@ pid_t tcgetpgrp(int);
 int tcsetpgrp(int, pid_t);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no getuid etc. */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no getuid etc. */
 uid_t getuid(void);
 uid_t geteuid(void);
 gid_t getgid(void);
 gid_t getegid(void);
 int getgroups(int, gid_t []);
+#endif
+#ifdef __wasilibc_unmodified_upstream /* WASI has no setuid etc. */
 int setuid(uid_t);
 int seteuid(uid_t);
 int setgid(gid_t);

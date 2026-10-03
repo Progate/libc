@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -42,8 +43,12 @@ int __wasilibc_nocwd_fstatat(int fd, const char *restrict path, struct stat *res
       return -1;
   }
   to_public_stat(&internal_stat, buf);
-  if (has_mode)
+  if (has_mode) {
+    // 持ち主は自分（→ fstat.c）
     buf->st_mode = mode;
+    buf->st_uid = getuid();
+    buf->st_gid = getgid();
+  }
 
   return 0;
 #elif defined(__wasip2__) || defined(__wasip3__)
