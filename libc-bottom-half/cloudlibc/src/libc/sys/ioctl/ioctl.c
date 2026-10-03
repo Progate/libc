@@ -8,6 +8,9 @@
 #include <sys/ioctl.h>
 #include <wasi/api.h>
 #include <wasi/descriptor_table.h>
+#ifdef __wasilibc_browseros
+#include <browseros/host.h>
+#endif
 
 #ifndef __wasip1__
 #include <stddefer.h>
@@ -112,6 +115,22 @@ int ioctl(int fildes, int request, ...) {
 # error "Unknown WASI version"
 #endif
     }
+#ifdef __wasilibc_browseros
+    case TIOCGWINSZ:
+    case TIOCSWINSZ: {
+      // BrowserOS: 端末の大きさはカーネルが持つ（→ browseros/termios.c）
+      va_list ap;
+      va_start(ap, request);
+      void *size = va_arg(ap, void *);
+      va_end(ap);
+      int32_t error = __browseros_tty_ioctl(fildes, request, size);
+      if (error != 0) {
+        errno = error;
+        return -1;
+      }
+      return 0;
+    }
+#endif
     default:
       // Invalid request.
       errno = EINVAL;

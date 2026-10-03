@@ -36,6 +36,15 @@ int32_t __browseros_fchmod(int32_t fd, uint32_t mode);
 __BROWSEROS_IMPORT("browser_os_fs", "chmod_at")
 int32_t __browseros_chmod_at(int32_t dirfd, const char *path, uint32_t path_len, uint32_t mode);
 
+// browser_os_tty（端末。state は ICANON を落としているか・ECHO・ISIG の i32 3 つ）
+
+__BROWSEROS_IMPORT("browser_os_tty", "tcgetattr")
+int32_t __browseros_tcgetattr(int32_t fd, int32_t *state);
+__BROWSEROS_IMPORT("browser_os_tty", "tcsetattr")
+int32_t __browseros_tcsetattr(int32_t fd, int32_t actions, const int32_t *state);
+__BROWSEROS_IMPORT("browser_os_tty", "ioctl")
+int32_t __browseros_tty_ioctl(int32_t fd, int32_t request, void *arg);
+
 // browser_os_process
 
 /// pipe2(2)。flags は O_NONBLOCK だけ

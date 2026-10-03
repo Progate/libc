@@ -165,7 +165,10 @@ endif()
 # BrowserOS の libc（p1）は、カーネルのホスト関数で posix_spawn と waitpid を持つ（→ libc-bottom-half/sources/browseros）
 if(WASI STREQUAL "p1")
   list(APPEND globbed_headers
+    musl/arch/generic/bits/termios.h
     musl/include/spawn.h
+    musl/include/sys/termios.h
+    musl/include/termios.h
     musl/include/sys/wait.h
     musl/include/wait.h
   )
@@ -489,6 +492,10 @@ if (WASI STREQUAL "p1")
     musl/src/temp/mkstemp.c
     musl/src/temp/mkstemps.c
     musl/src/temp/mktemp.c
+    musl/src/termios/cfgetospeed.c
+    musl/src/termios/cfmakeraw.c
+    musl/src/termios/cfsetospeed.c
+    musl/src/termios/cfsetspeed.c
   )
 endif()
 

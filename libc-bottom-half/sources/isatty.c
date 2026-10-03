@@ -10,6 +10,7 @@
 #include <wasi/file_utils.h>
 #endif
 
+#ifndef __wasilibc_browseros
 int __isatty(int fd) {
 #if defined(__wasip1__)
   __wasi_fdstat_t statbuf;
@@ -46,3 +47,4 @@ int __isatty(int fd) {
 }
 
 weak_alias(__isatty, isatty);
+#endif /* BrowserOS は browseros/termios.c が持つ */
