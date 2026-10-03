@@ -1,4 +1,12 @@
 add_compile_options(-Wno-unused-function)
+
+# BrowserOS の libc（p1）はシグナルを libc 本体に持つので、ここは空にする（→ sources/browseros/signal.c）
+if (WASI STREQUAL "p1")
+  add_internal_library_pair(wasi-emulated-signal signal-empty.c)
+  sysroot_lib(wasi-emulated-signal-static libwasi-emulated-signal.a)
+  sysroot_lib(wasi-emulated-signal libwasi-emulated-signal.so)
+  return()
+endif()
 add_internal_object_library(top-half-emulated-signal
     ../../libc-top-half/musl/src/signal/psignal.c
     ../../libc-top-half/musl/src/string/strsignal.c)

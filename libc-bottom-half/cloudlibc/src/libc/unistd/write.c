@@ -5,6 +5,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include <wasi/api.h>
+#ifdef __wasilibc_browseros
+#include <browseros/libc.h>
+#endif
 
 #ifndef __wasip1__
 #include <stddefer.h>
@@ -23,6 +26,10 @@ ssize_t write(int fildes, const void *buf, size_t nbyte) {
       __wasi_fd_write(fildes, &iov, 1, &bytes_written);
   if (error != 0) {
     errno = error == ENOTCAPABLE ? EBADF : error;
+#ifdef __wasilibc_browseros
+    if (error == EPIPE)
+      __browseros_broken_pipe();
+#endif
     return -1;
   }
   return bytes_written;

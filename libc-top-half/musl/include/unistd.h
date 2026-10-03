@@ -145,7 +145,7 @@ int fexecve(int, char *const [], char *const []);
 #endif
 _Noreturn void _exit(int);
 
-#if defined(__wasilibc_unmodified_upstream) || defined(_WASI_EMULATED_GETPID)
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) || defined(_WASI_EMULATED_GETPID)
 pid_t getpid(void);
 #else
 __attribute__((__deprecated__(
@@ -155,8 +155,10 @@ __attribute__((__deprecated__(
 )))
 pid_t getpid(void);
 #endif
-#ifdef __wasilibc_unmodified_upstream /* WASI has no getpid etc. */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 pid_t getppid(void);
+#endif
+#ifdef __wasilibc_unmodified_upstream /* WASI has no process groups */
 pid_t getpgrp(void);
 pid_t getpgid(pid_t);
 int setpgid(pid_t, pid_t);

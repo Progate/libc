@@ -162,6 +162,15 @@ if(WASI STREQUAL "p1")
   )
 endif()
 
+# BrowserOS の libc（p1）は、カーネルのホスト関数で posix_spawn と waitpid を持つ（→ libc-bottom-half/sources/browseros）
+if(WASI STREQUAL "p1")
+  list(APPEND globbed_headers
+    musl/include/spawn.h
+    musl/include/sys/wait.h
+    musl/include/wait.h
+  )
+endif()
+
 foreach(header ${globbed_headers})
   if(${header} MATCHES "^musl/include/")
     string(REPLACE "musl/include/" "" dst ${header})
@@ -445,6 +454,33 @@ list(APPEND top_half_sources ${globbed_sources})
 if (NOT (WASI STREQUAL "p1"))
   list(APPEND top_half_sources
     musl/src/network/gai_strerror.c
+  )
+endif()
+
+# BrowserOS の libc（p1）はシグナルを libc 本体に持つ。集合の操作や sigset・sighold は musl のものが
+# sigaction / sigprocmask の上にそのまま載る（→ libc-bottom-half/sources/browseros/signal.c）
+if (WASI STREQUAL "p1")
+  list(APPEND top_half_sources
+    musl/src/signal/killpg.c
+    musl/src/signal/psiginfo.c
+    musl/src/signal/psignal.c
+    musl/src/signal/sigaddset.c
+    musl/src/signal/sigandset.c
+    musl/src/signal/sigdelset.c
+    musl/src/signal/sigemptyset.c
+    musl/src/signal/sigfillset.c
+    musl/src/signal/sighold.c
+    musl/src/signal/sigignore.c
+    musl/src/signal/siginterrupt.c
+    musl/src/signal/sigisemptyset.c
+    musl/src/signal/sigismember.c
+    musl/src/signal/sigorset.c
+    musl/src/signal/sigpause.c
+    musl/src/signal/sigrelse.c
+    musl/src/signal/sigrtmax.c
+    musl/src/signal/sigrtmin.c
+    musl/src/signal/sigset.c
+    musl/src/string/strsignal.c
   )
 endif()
 

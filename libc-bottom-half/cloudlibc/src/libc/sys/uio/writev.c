@@ -5,6 +5,9 @@
 #include <sys/uio.h>
 #include <assert.h>
 #include <wasi/api.h>
+#ifdef __wasilibc_browseros
+#include <browseros/libc.h>
+#endif
 #include <errno.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -43,6 +46,10 @@ ssize_t writev(int fildes, const struct iovec *iov, int iovcnt) {
       fildes, (const __wasi_ciovec_t *)iov, iovcnt, &bytes_written);
   if (error != 0) {
     errno = error;
+#ifdef __wasilibc_browseros
+    if (error == EPIPE)
+      __browseros_broken_pipe();
+#endif
     return -1;
   }
   return bytes_written;

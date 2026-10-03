@@ -88,7 +88,7 @@ int fstatat(int, const char *__restrict, struct stat *__restrict, int);
 int chmod(const char *, mode_t);
 int fchmod(int, mode_t);
 int fchmodat(int, const char *, mode_t, int);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no umask */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 mode_t umask(mode_t);
 #endif
 int mkdir(const char *, mode_t);
