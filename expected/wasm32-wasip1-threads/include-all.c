@@ -118,6 +118,7 @@
 #include <sched.h>
 #include <search.h>
 #include <semaphore.h>
+#include <spawn.h>
 #include <stdalign.h>
 #include <stdbool.h>
 #include <stdc-predef.h>
@@ -146,6 +147,7 @@
 #include <sys/stropts.h>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
+#include <sys/termios.h>
 #include <sys/time.h>
 #include <sys/timeb.h>
 #include <sys/timex.h>
@@ -154,9 +156,11 @@
 #include <sys/uio.h>
 #include <sys/un.h>
 #include <sys/utsname.h>
+#include <sys/wait.h>
 #include <syscall.h>
 #include <sysexits.h>
 #include <tar.h>
+#include <termios.h>
 #include <tgmath.h>
 #include <threads.h>
 #include <time.h>
@@ -164,6 +168,7 @@
 #include <unistd.h>
 #include <utime.h>
 #include <values.h>
+#include <wait.h>
 #include <wasi/api.h>
 #include <wasi/libc-busywait.h>
 #include <wasi/libc-environ.h>
