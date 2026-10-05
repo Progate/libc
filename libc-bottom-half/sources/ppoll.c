@@ -11,6 +11,10 @@
 #endif
 
 #if defined(__wasip1__)
+#include <browseros/libc.h>
+#include <signal.h>
+#include <stdint.h>
+
 static int ppoll_impl(struct pollfd *fds, size_t nfds,
                       const struct timespec *timeout) {
   // Construct events for poll().
@@ -54,6 +58,13 @@ static int ppoll_impl(struct pollfd *fds, size_t nfds,
       return -1;
     }
   }
+
+  // BrowserOS: nothing to wait for but signals. The kernel interrupts the poll
+  // with EINTR when one is sent, so a clock that never fires makes this wait
+  // until a signal arrives, as poll(2) with no descriptors does.
+  struct timespec forever = {.tv_sec = INT32_MAX, .tv_nsec = 0};
+  if (nsubscriptions == 0 && !timeout)
+    timeout = &forever;
 
   // Create extra event for the timeout.
   if (timeout) {
@@ -598,7 +609,6 @@ static int validate_something_not_pollpri(struct pollfd *fds, size_t nfds) {
 
 int ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *timeout,
           const sigset_t *sigmask) {
-  (void)sigmask;
   if (timeout && (timeout->tv_sec < 0 || timeout->tv_nsec >= 1000000000 ||
                   timeout->tv_nsec < 0)) {
     errno = EINVAL;
@@ -608,5 +618,27 @@ int ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *timeout,
     return -1;
   for (size_t i = 0; i < nfds; ++i)
     fds[i].revents = 0;
+#ifdef __wasip1__
+  // BrowserOS: 待つあいだだけマスクを差し替える（ppoll(2)）。外したマスクで保留にあったシグナルが配られたら、
+  // 待たずに EINTR で戻る。待つあいだに送られたものは、カーネルが poll_oneoff を EINTR で起こし、戻るところで配られる
+  if (!sigmask)
+    return ppoll_impl(fds, nfds, timeout);
+  sigset_t saved;
+  unsigned before = __browseros_handled_count();
+  pthread_sigmask(SIG_SETMASK, sigmask, &saved);
+  int result;
+  if (__browseros_handled_count() != before) {
+    errno = EINTR;
+    result = -1;
+  } else {
+    result = ppoll_impl(fds, nfds, timeout);
+  }
+  int saved_errno = errno;
+  pthread_sigmask(SIG_SETMASK, &saved, 0);
+  errno = saved_errno;
+  return result;
+#else
+  (void)sigmask;
   return ppoll_impl(fds, nfds, timeout);
+#endif
 }

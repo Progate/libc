@@ -17,6 +17,9 @@ int __browseros_nocwd_mkdirat(int dirfd, const char *path, mode_t mode);
 /// いま無視しているシグナルと、呼んだスレッドが塞いでいるシグナルをカーネルへ知らせる（posix_spawn の子へ継ぐ）。→ signal.c
 void __browseros_report_signals(void);
 
+/// このスレッドでハンドラを走らせた回数。ppoll・sigsuspend が「待つあいだに配られたか」を見る。→ signal.c
+unsigned __browseros_handled_count(void);
+
 /// 読む端の無いパイプへ書いて EPIPE になったときに呼ぶ。SIGPIPE を起こし、errno は EPIPE のまま戻す。→ signal.c
 void __browseros_broken_pipe(void);
 

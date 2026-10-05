@@ -11,8 +11,12 @@
 // 塞いだまま始まる）。起動時に読んで、動作の表とマスクの初期値にする。親の扱いは、posix_spawn の前に
 // __browseros_report_signals でカーネルへ知らせる（本物ではカーネルがもともと持っているもの）。
 //
-// 届くのはこのプロセスの中で起きたシグナル（raise・abort・kill(getpid())・読む端の無いパイプへの write の
-// SIGPIPE）である。他のプロセスからの kill(2) はカーネルが既定の動作で止める（→ browser-os の process/kernel.ts）。
+// 届くのは、このプロセスの中で起きたシグナル（raise・abort・kill(getpid())・読む端の無いパイプへの write の
+// SIGPIPE）と、カーネルが送るシグナル（子が終わったときの SIGCHLD・他のプロセスからの kill(2)・端末の Ctrl+C）である。
+// カーネルが送るものは、ハンドラを置いているときだけ保留に積まれる（置いていなければカーネルが既定の動作にする）。
+// ハンドラを置いたら __browseros_set_handlers で知らせる。カーネルは止まっている syscall を EINTR で起こし、
+// syscall から戻るところでランタイムが __browseros_signal を呼ぶ（Unix のカーネルがユーザー空間へ戻るところで
+// ハンドラを走らせるのと同じ。→ browser-wasi の signals.ts）。
 
 #define _GNU_SOURCE
 #include <browseros/host.h>
@@ -24,6 +28,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <wasi/api.h>
 
 /// 各シグナルの動作。0 で埋まった `sa_handler`（SIG_DFL）が初期状態
 static struct sigaction actions[_NSIG];
@@ -33,6 +38,11 @@ static _Thread_local sigset_t blocked;
 
 /// 塞がれているあいだに届き、まだ配っていないシグナル
 static _Thread_local sigset_t pending;
+
+/// このスレッドでハンドラを走らせた回数（→ __browseros_handled_count）
+static _Thread_local unsigned handled_count;
+
+unsigned __browseros_handled_count(void) { return handled_count; }
 
 void __SIG_IGN(int sig) { (void)sig; }
 
@@ -53,6 +63,8 @@ static void set_of(uint64_t mask, sigset_t *set) {
 }
 
 // main より前（stdio が書き始めるより前）に読む。読めないホストでは既定の動作で、塞がずに始める
+static void report_handlers(void);
+
 __attribute__((constructor(10))) static void adopt_initial_signals(void) {
   uint64_t ignored = 0, mask = 0;
   if (__browseros_initial_signals(&ignored, &mask) != 0)
@@ -61,6 +73,17 @@ __attribute__((constructor(10))) static void adopt_initial_signals(void) {
     if (ignored & ((uint64_t)1 << (sig - 1)))
       actions[sig].sa_handler = SIG_IGN;
   set_of(mask, &blocked);
+  report_handlers();
+}
+
+/// 送られたときに保留へ積んでほしいシグナルをカーネルへ知らせる。ハンドラを置いたものと、塞いでいるもの
+/// （塞いでいるあいだは保留に残り、外したときに配られる。sigwait で待つのもこれ）。それ以外はカーネルが既定の動作にする
+static void report_handlers(void) {
+  uint64_t caught = mask_of(&blocked);
+  for (int sig = 1; sig < _NSIG; sig++)
+    if (actions[sig].sa_handler != SIG_DFL && actions[sig].sa_handler != SIG_IGN)
+      caught |= (uint64_t)1 << (sig - 1);
+  __browseros_set_handlers(caught);
 }
 
 void __browseros_report_signals(void) {
@@ -131,6 +154,7 @@ static void deliver(int sig) {
     actions[sig].sa_handler = SIG_DFL;
     actions[sig].sa_flags &= ~SA_SIGINFO;
   }
+  handled_count++;
   if (action.sa_flags & SA_SIGINFO) {
     siginfo_t info;
     memset(&info, 0, sizeof info);
@@ -153,6 +177,20 @@ static void deliver_pending(void) {
       deliver(sig);
     }
   }
+}
+
+/// カーネルが送ったシグナルを、syscall から戻るところで配る口（ランタイムが呼ぶ。→ browser-wasi の signals.ts）。
+/// 塞いでいればこのスレッドの保留に入る。戻り値は、その syscall を EINTR で終える代わりにやり直してよいか
+/// （ハンドラが SA_RESTART を持つか。ハンドラの無いシグナルは何も中断していないのでやり直してよい）
+__attribute__((export_name("__browseros_signal"))) int __browseros_signal(int sig) {
+  if (!valid(sig))
+    return 1;
+  int saved = errno;
+  struct sigaction action = actions[sig];
+  deliver(sig);
+  errno = saved;
+  int caught = action.sa_handler != SIG_DFL && action.sa_handler != SIG_IGN;
+  return !caught || (action.sa_flags & SA_RESTART) != 0;
 }
 
 int raise(int sig) {
@@ -182,6 +220,7 @@ int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *r
     // 無視にしたシグナルの保留は捨てる（POSIX: 保留中のシグナルを SIG_IGN にすると捨てられる）
     if (act->sa_handler == SIG_IGN || (act->sa_handler == SIG_DFL && discarded_by_default(sig)))
       sigdelset(&pending, sig);
+    report_handlers();
   }
   return 0;
 }
@@ -222,6 +261,7 @@ int pthread_sigmask(int how, const sigset_t *restrict set, sigset_t *restrict ol
   sigdelset(&next, SIGKILL);
   sigdelset(&next, SIGSTOP);
   blocked = next;
+  report_handlers();
   deliver_pending();
   return 0;
 }
@@ -251,41 +291,81 @@ static int take_pending(const sigset_t *set) {
   return 0;
 }
 
+/// シグナルが配られるまで止まる。カーネルは保留を積むと止まっている poll_oneoff を EINTR で起こし、ランタイムが
+/// 戻るところでハンドラを走らせる。時間切れなら 0、起こされたら -1（EINTR）
+static int wait_for_signal(const struct timespec *timeout) {
+  __wasi_subscription_t subscription = {
+      .u.tag = __WASI_EVENTTYPE_CLOCK,
+      .u.u.clock.id = __WASI_CLOCKID_MONOTONIC,
+      // 締め切りの無い待ちは、届かない限り戻らない長さにする（poll_oneoff は待つものが 1 つは要る）
+      .u.u.clock.timeout = timeout ? (__wasi_timestamp_t)timeout->tv_sec * 1000000000 + timeout->tv_nsec
+                                   : UINT64_MAX / 2,
+  };
+  __wasi_event_t event;
+  size_t nevents;
+  __wasi_errno_t error = __wasi_poll_oneoff(&subscription, &event, 1, &nevents);
+  if (error == __WASI_ERRNO_INTR) {
+    errno = EINTR;
+    return -1;
+  }
+  return 0;
+}
+
 int sigsuspend(const sigset_t *mask) {
   sigset_t saved = blocked;
+  unsigned before = handled_count;
   blocked = *mask;
   sigdelset(&blocked, SIGKILL);
   sigdelset(&blocked, SIGSTOP);
-  for (int sig = 1; sig < _NSIG; sig++) {
-    if (sigismember(&pending, sig) && !sigismember(&blocked, sig)) {
-      sigdelset(&pending, sig);
-      deliver(sig);
-      blocked = saved;
-      deliver_pending();
-      errno = EINTR;
-      return -1;
-    }
-  }
-  /*
-   * 届くシグナルはこのスレッドの中で起きるものだけなので、保留が無ければもう何も届かない。
-   * 他のプロセスからの kill(2) はカーネルがこのプロセスを止めるので、それまで眠る（本物の sigsuspend と同じく戻らない）
-   */
-  for (;;)
-    sleep(3600);
+  // 保留にあったものは、マスクを外した時点で配る
+  deliver_pending();
+  // 何か配られるまで待つ（塞いだままのシグナルは保留に入るだけで、起きてもまた待つ）
+  while (handled_count == before)
+    wait_for_signal(0);
+  blocked = saved;
+  deliver_pending();
+  errno = EINTR;
+  return -1;
 }
 
 int sigtimedwait(const sigset_t *restrict set, siginfo_t *restrict info,
                  const struct timespec *restrict timeout) {
   int sig = take_pending(set);
   if (sig == 0) {
-    // 保留が無ければ、待っても届かない（sigsuspend と同じ理由）。時間切れまで眠って EAGAIN
-    if (!timeout) {
-      for (;;)
-        sleep(3600);
+    // 待っているシグナルは塞がれているので、届けば保留に入る。届くか時間切れまで待つ
+    struct timespec deadline;
+    if (timeout) {
+      clock_gettime(CLOCK_MONOTONIC, &deadline);
+      deadline.tv_sec += timeout->tv_sec;
+      deadline.tv_nsec += timeout->tv_nsec;
+      if (deadline.tv_nsec >= 1000000000) {
+        deadline.tv_sec++;
+        deadline.tv_nsec -= 1000000000;
+      }
     }
-    nanosleep(timeout, 0);
-    errno = EAGAIN;
-    return -1;
+    while ((sig = take_pending(set)) == 0) {
+      struct timespec rest;
+      if (timeout) {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        rest.tv_sec = deadline.tv_sec - now.tv_sec;
+        rest.tv_nsec = deadline.tv_nsec - now.tv_nsec;
+        if (rest.tv_nsec < 0) {
+          rest.tv_sec--;
+          rest.tv_nsec += 1000000000;
+        }
+        if (rest.tv_sec < 0) {
+          errno = EAGAIN;
+          return -1;
+        }
+      }
+      if (wait_for_signal(timeout ? &rest : 0) == 0 && timeout) {
+        if ((sig = take_pending(set)) != 0)
+          break;
+        errno = EAGAIN;
+        return -1;
+      }
+    }
   }
   if (info) {
     memset(info, 0, sizeof *info);
