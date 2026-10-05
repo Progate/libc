@@ -30,15 +30,15 @@ pid_t getppid(void) {
 
 int kill(pid_t pid, int sig) {
   pid_t self = getpid();
-  // 自分自身（自分のグループ）へ送るのは raise と同じ（ハンドラがあれば呼ぶ。→ signal.c）
-  if (pid == self || pid == 0 || pid == -self) {
+  // 自分自身へ送るのは raise と同じ（ハンドラがあれば呼ぶ。→ signal.c）
+  if (pid == self) {
     if (sig == 0)
       return 0;
     return raise(sig);
   }
-  // ほかのグループも「全部」（-1）も、送れる相手は居ない
-  if (pid < 0) {
-    errno = ESRCH;
+  // 「送れる全部」（-1）は受けない。0 と -pgid はグループ全体で、自分も入っていればカーネルが保留に積むか止める
+  if (pid == -1) {
+    errno = EPERM;
     return -1;
   }
   int32_t error = __browseros_kill(pid, sig);
@@ -65,3 +65,26 @@ mode_t umask(mode_t mask) {
 
 /// open(2) / mkdir(2) が新しく作るものに付ける権限（`mode & ~umask`）
 mode_t __browseros_creation_mode(mode_t mode) { return mode & ~current_umask & 07777; }
+
+pid_t getpgid(pid_t pid) {
+  int32_t pgid = 0;
+  int32_t error = __browseros_getpgid(pid, &pgid);
+  if (error != 0) {
+    errno = error;
+    return -1;
+  }
+  return pgid;
+}
+
+pid_t getpgrp(void) { return getpgid(0); }
+
+int setpgid(pid_t pid, pid_t pgid) {
+  int32_t error = __browseros_setpgid(pid, pgid);
+  if (error != 0) {
+    errno = error;
+    return -1;
+  }
+  return 0;
+}
+
+int setpgrp(void) { return setpgid(0, 0); }

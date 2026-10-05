@@ -305,10 +305,11 @@ static uint64_t mask_of_set(const sigset_t *set) {
   return mask;
 }
 
-/// カーネルへ渡す attr（flags・sigdefault・sigmask）
+/// カーネルへ渡す attr（flags・sigdefault・sigmask・pgroup）
 struct encoded_attr {
   uint32_t flags, pad;
   uint64_t sigdefault, sigmask;
+  int32_t pgroup, pad2;
 };
 
 /// 1 つのパスで起こす。file actions と attr はもうバイト列になっている
@@ -374,6 +375,7 @@ static int spawn(pid_t *restrict pid, const char *restrict file,
     encoded.flags = (uint16_t)attr->__flags;
     encoded.sigdefault = mask_of_set(&attr->__def);
     encoded.sigmask = mask_of_set(&attr->__mask);
+    encoded.pgroup = attr->__pgrp;
   }
   size_t argv_len = 0, env_len = 0;
   char *packed_argv = error ? 0 : pack(argv, &argv_len);

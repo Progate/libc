@@ -1,7 +1,7 @@
 // waitpid(2) / wait(2) / wait3 / wait4。子が終わるのを待つのはカーネルで、このプロセスはそのあいだ止まる
 // （→ browser-os の src/process/wasi-spawn.ts の wait）。
 //
-// この OS にプロセスグループは無いので、`pid` が 0 や -pgid でも「起こした子のどれでも」（-1）として待つ。
+// `pid` が 0 なら自分のグループの子、-pgid ならそのグループの子を待つ（カーネルが子のグループを見る）。
 // 止まった子・再開した子は居ない（この OS は止める動作のシグナルを捨てる。→ signal.c）ので報告しない。
 
 #define _GNU_SOURCE
@@ -14,7 +14,7 @@
 
 pid_t waitpid(pid_t pid, int *status, int options) {
   int32_t raw = 0, child = 0;
-  int32_t error = __browseros_wait(pid > 0 ? pid : -1, options & WNOHANG, &raw, &child);
+  int32_t error = __browseros_wait(pid, options & WNOHANG, &raw, &child);
   if (error != 0) {
     errno = error;
     return -1;
@@ -44,7 +44,8 @@ int waitid(idtype_t type, id_t id, siginfo_t *info, int options) {
   }
   int32_t raw = 0, child = 0;
   int32_t kernel_options = (options & WNOHANG) | (options & WNOWAIT ? BROWSEROS_WNOWAIT : 0);
-  int32_t error = __browseros_wait(type == P_PID ? (int32_t)id : -1, kernel_options, &raw, &child);
+  int32_t target = type == P_PID ? (int32_t)id : type == P_PGID ? (id == 0 ? 0 : -(int32_t)id) : -1;
+  int32_t error = __browseros_wait(target, kernel_options, &raw, &child);
   if (error != 0) {
     errno = error;
     return -1;

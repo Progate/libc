@@ -74,6 +74,12 @@ int32_t __browseros_set_signals(uint64_t ignored, uint64_t blocked);
 /// このプロセスが始めるときに無視するシグナルと塞ぐシグナル（親の扱いと posix_spawn の attr からカーネルが決めたもの）
 __BROWSEROS_IMPORT("browser_os_process", "initial_signals")
 int32_t __browseros_initial_signals(uint64_t *ignored, uint64_t *blocked);
+/// プロセスグループ（getpgid(2)。pid 0 は自分）
+__BROWSEROS_IMPORT("browser_os_process", "getpgid")
+int32_t __browseros_getpgid(int32_t pid, int32_t *pgid);
+/// プロセスグループを変える（setpgid(2)）
+__BROWSEROS_IMPORT("browser_os_process", "setpgid")
+int32_t __browseros_setpgid(int32_t pid, int32_t pgid);
 /// ハンドラを置いているシグナル（シグナル n はビット n-1）を知らせる。カーネルは送るときにこれを見て、置いてあるシグナルは
 /// 既定の動作の代わりに保留へ積み、止まっている syscall を EINTR で起こす。syscall から戻るところでランタイムが
 /// __browseros_signal を呼んでハンドラを走らせる（→ signal.c）
