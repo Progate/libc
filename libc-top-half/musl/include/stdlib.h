@@ -164,6 +164,8 @@ int mkostemps (char *, int, int);
 #ifdef __wasilibc_unmodified_upstream /* WASI libc doesn't build the legacy functions */
 void *valloc (size_t);
 void *memalign(size_t, size_t);
+#endif
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 int getloadavg(double *, int);
 #endif
 int clearenv(void);

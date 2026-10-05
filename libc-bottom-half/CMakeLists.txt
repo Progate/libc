@@ -148,6 +148,7 @@ if (WASI STREQUAL "p1")
     sources/browseros/clocks.c
     sources/browseros/create.c
     sources/browseros/flock.c
+    sources/browseros/loadavg.c
     sources/browseros/popen.c
     sources/browseros/process.c
     sources/browseros/signal.c
