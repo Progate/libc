@@ -13,6 +13,7 @@ __browseros_initial_signals
 __browseros_kill
 __browseros_pipe2
 __browseros_posix_spawnp
+__browseros_set_handlers
 __browseros_set_signals
 __browseros_stat_at
 __browseros_tcgetattr
