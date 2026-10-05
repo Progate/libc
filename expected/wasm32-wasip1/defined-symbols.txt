@@ -766,10 +766,13 @@ getgroups
 gethostid
 gethostname
 getline
+getloadavg
 getopt
 getopt_long
 getopt_long_only
 getpagesize
+getpgid
+getpgrp
 getpid
 getppid
 getrusage
@@ -1240,6 +1243,8 @@ setenv
 setkey
 setlinebuf
 setlocale
+setpgid
+setpgrp
 setstate
 setvbuf
 shutdown

@@ -7,6 +7,7 @@ __browseros_exit_signal
 __browseros_fchmod
 __browseros_flock
 __browseros_fstat
+__browseros_getpgid
 __browseros_getpid
 __browseros_getppid
 __browseros_initial_signals
@@ -15,6 +16,7 @@ __browseros_pipe2
 __browseros_posix_spawnp
 __browseros_set_handlers
 __browseros_set_signals
+__browseros_setpgid
 __browseros_stat_at
 __browseros_tcgetattr
 __browseros_tcsetattr
