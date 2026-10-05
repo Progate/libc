@@ -158,10 +158,12 @@ pid_t getpid(void);
 #if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 pid_t getppid(void);
 #endif
-#ifdef __wasilibc_unmodified_upstream /* WASI has no process groups */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS has process groups */
 pid_t getpgrp(void);
 pid_t getpgid(pid_t);
 int setpgid(pid_t, pid_t);
+#endif
+#ifdef __wasilibc_unmodified_upstream /* WASI has no process groups */
 pid_t setsid(void);
 pid_t getsid(pid_t);
 #endif
@@ -219,6 +221,8 @@ long gethostid(void);
 #ifdef __wasilibc_unmodified_upstream /* WASI has no nice, sync, or setpgrp */
 int nice(int);
 void sync(void);
+#endif
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 pid_t setpgrp(void);
 #endif
 char *crypt(const char *, const char *);

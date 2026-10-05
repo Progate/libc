@@ -87,4 +87,4 @@ int setpgid(pid_t pid, pid_t pgid) {
   return 0;
 }
 
-int setpgrp(void) { return setpgid(0, 0); }
+pid_t setpgrp(void) { return setpgid(0, 0); }
