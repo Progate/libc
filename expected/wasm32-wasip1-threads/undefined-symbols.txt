@@ -4,6 +4,7 @@ __browseros_credentials
 __browseros_dup
 __browseros_dup2
 __browseros_exit_signal
+__browseros_fchdir
 __browseros_fchmod
 __browseros_flock
 __browseros_fstat

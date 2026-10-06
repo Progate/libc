@@ -46,6 +46,7 @@ __ctype_tolower_loc
 __ctype_toupper_loc
 __cxa_atexit
 __cxa_finalize
+__daylight
 __default_guardsize
 __default_stacksize
 __des_setkey
@@ -295,6 +296,7 @@ __testcancel
 __thread_list_lock
 __timedwait
 __timedwait_cp
+__timezone
 __tl_lock
 __tl_sync
 __tl_unlock
@@ -313,6 +315,7 @@ __tre_mem_alloc_impl
 __tre_mem_destroy
 __tre_mem_new_impl
 __tsearch_balance
+__tzname
 __uflow
 __unlist_locked_file
 __unlock
@@ -594,6 +597,7 @@ ctanhl
 ctanl
 ctime
 ctime_r
+daylight
 difftime
 dirfd
 dirname
@@ -635,6 +639,7 @@ fabs
 fabsf
 fabsl
 faccessat
+fchdir
 fchmod
 fchmodat
 fchown
@@ -953,6 +958,7 @@ lroundl
 lsearch
 lseek
 lstat
+madvise
 malloc
 malloc_usable_size
 mblen
@@ -993,6 +999,7 @@ modff
 modfl
 mprotect
 mrand48
+msync
 mtx_destroy
 mtx_init
 mtx_lock
@@ -1041,6 +1048,7 @@ popen
 posix_close
 posix_fadvise
 posix_fallocate
+posix_madvise
 posix_memalign
 posix_spawn
 posix_spawn_file_actions_addchdir_np
@@ -1080,6 +1088,7 @@ program_invocation_short_name
 pselect
 psiginfo
 psignal
+pthread_atfork
 pthread_attr_destroy
 pthread_attr_getdetachstate
 pthread_attr_getguardsize
@@ -1406,6 +1415,7 @@ time
 timegm
 times
 timespec_get
+timezone
 tmpfile
 tmpnam
 toascii
@@ -1426,6 +1436,8 @@ truncl
 tsearch
 tss_get
 twalk
+tzname
+tzset
 umask
 uname
 ungetc
