@@ -9,6 +9,7 @@
 
 #ifdef __wasip1__
 #include <browseros/host.h>
+#include <browseros/libc.h>
 #endif
 
 #ifndef __wasip1__
@@ -40,6 +41,9 @@ int fcntl(int fildes, int cmd, ...) {
         errno = error;
         return -1;
       }
+      // 複製にもソケットとして覚えていたことを写す（→ browseros/socket.c）
+      if (__browseros_socket_copy)
+        __browseros_socket_copy(fildes, newfd);
       return newfd;
     }
 #endif

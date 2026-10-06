@@ -8,6 +8,10 @@
 #include <wasi/file_utils.h>
 #endif
 
+#ifdef __wasilibc_browseros
+#include <browseros/libc.h>
+#endif
+
 #ifdef __wasip1__
 int __wasilibc_fd_renumber(int fd, int newfd) {
   // Scan the preopen fds before making any changes.
@@ -18,6 +22,13 @@ int __wasilibc_fd_renumber(int fd, int newfd) {
     errno = error;
     return -1;
   }
+#ifdef __wasilibc_browseros
+  // BrowserOS: ソケットとして覚えていたことを、移した先へ写す（→ browseros/socket.c）
+  if (__browseros_socket_copy) {
+    __browseros_socket_copy(fd, newfd);
+    __browseros_socket_forget(fd);
+  }
+#endif
   return 0;
 }
 #endif
@@ -32,6 +43,12 @@ int close(int fd) {
     errno = error;
     return -1;
   }
+#ifdef __wasilibc_browseros
+  // BrowserOS: 番号が空いたので、ソケットとして覚えていたことを忘れる（ソケットを使わないプログラムには
+  // 弱い参照なので socket.c が入らない）
+  if (__browseros_socket_forget)
+    __browseros_socket_forget(fd);
+#endif
 #elif defined(__wasip2__) || defined(__wasip3__)
   if (descriptor_table_remove(fd) < 0)
     return -1;

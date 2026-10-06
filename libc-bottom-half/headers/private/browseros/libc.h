@@ -23,4 +23,14 @@ unsigned __browseros_handled_count(void);
 /// 読む端の無いパイプへ書いて EPIPE になったときに呼ぶ。SIGPIPE を起こし、errno は EPIPE のまま戻す。→ signal.c
 void __browseros_broken_pipe(void);
 
+/// 名前の代わりに割り当てた番地（ホストのバイト順）なら、その名前を host に写して 1。そうでなければ 0、
+/// 割り当てていない名前の範囲の番地なら -1。→ netdb.c
+int __browseros_name_of_address(unsigned int address, char *host, unsigned long size);
+
+/// fd が閉じた・別のものに置き換わったので、ソケットとして覚えていたことを忘れる。→ socket.c
+void __browseros_socket_forget(int fd) __attribute__((__weak__));
+
+/// fd の複製に、ソケットとして覚えていたことを写す。→ socket.c
+void __browseros_socket_copy(int from, int to) __attribute__((__weak__));
+
 #endif

@@ -33,10 +33,19 @@
 #define ADJ_TAI 0x0080
 #define ADJ_TICK 0x4000
 #define ADJ_TIMECONST 0x0020
+#define AF_FILE PF_LOCAL
 #define AF_INET PF_INET
 #define AF_INET6 PF_INET6
+#define AF_LOCAL PF_LOCAL
 #define AF_UNIX 3
 #define AF_UNSPEC PF_UNSPEC
+#define AI_ADDRCONFIG 0x20
+#define AI_ALL 0x10
+#define AI_CANONNAME 0x02
+#define AI_NUMERICHOST 0x04
+#define AI_NUMERICSERV 0x400
+#define AI_PASSIVE 0x01
+#define AI_V4MAPPED 0x08
 #define ALT_DIGITS 0x2002F
 #define AM_STR 0x20026
 #define ANYMARK 0x01
@@ -97,6 +106,10 @@
 #define B75 0000002
 #define B921600 0010007
 #define B9600 0000015
+#define BC_BASE_MAX 99
+#define BC_DIM_MAX 2048
+#define BC_SCALE_MAX 99
+#define BC_STRING_MAX 1000
 #define BIG_ENDIAN __BIG_ENDIAN
 #define BITSPERBYTE CHAR_BIT
 #define BLKTYPE '4'
@@ -154,6 +167,12 @@
 #define CMPLX(x,y) __CMPLX(x, y, double)
 #define CMPLXF(x,y) __CMPLX(x, y, float)
 #define CMPLXL(x,y) __CMPLX(x, y, long double)
+#define CMSG_ALIGN(len) (((len) + sizeof(size_t) - 1) & (size_t) ~(sizeof(size_t) - 1))
+#define CMSG_DATA(cmsg) ((unsigned char *)(((struct cmsghdr *)(cmsg)) + 1))
+#define CMSG_FIRSTHDR(mhdr) ((size_t)(mhdr)->msg_controllen >= sizeof(struct cmsghdr) ? (struct cmsghdr *)(mhdr)->msg_control : (struct cmsghdr *)0)
+#define CMSG_LEN(len) (CMSG_ALIGN(sizeof(struct cmsghdr)) + (len))
+#define CMSG_NXTHDR(mhdr,cmsg) ((cmsg)->cmsg_len < sizeof(struct cmsghdr) || __CMSG_LEN(cmsg) + sizeof(struct cmsghdr) >= (size_t)(__MHDR_END(mhdr) - (unsigned char *)(cmsg)) ? 0 : (struct cmsghdr *)__CMSG_NEXT(cmsg))
+#define CMSG_SPACE(len) (CMSG_ALIGN(len) + CMSG_ALIGN(sizeof(struct cmsghdr)))
 #define CMSPAR 010000000000
 #define CODESET 14
 #define COLL_WEIGHTS_MAX 2
@@ -258,6 +277,24 @@
 #define EADDRNOTAVAIL 4
 #define EAFNOSUPPORT 5
 #define EAGAIN 6
+#define EAI_ADDRFAMILY -9
+#define EAI_AGAIN -3
+#define EAI_ALLDONE -103
+#define EAI_BADFLAGS -1
+#define EAI_CANCELED -101
+#define EAI_FAIL -4
+#define EAI_FAMILY -6
+#define EAI_IDN_ENCODE -105
+#define EAI_INPROGRESS -100
+#define EAI_INTR -104
+#define EAI_MEMORY -10
+#define EAI_NODATA -5
+#define EAI_NONAME -2
+#define EAI_NOTCANCELED -102
+#define EAI_OVERFLOW -12
+#define EAI_SERVICE -8
+#define EAI_SOCKTYPE -7
+#define EAI_SYSTEM -11
 #define EALREADY 7
 #define EBADF 8
 #define EBADID 5
@@ -378,6 +415,7 @@
 #define EXDEV 75
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
+#define EXPR_NEST_MAX 32
 #define EXTA 0000016
 #define EXTB 0000017
 #define EXTPROC 0200000
@@ -554,6 +592,7 @@
 #define HIBITL MINLONG
 #define HIBITS MINSHORT
 #define HOST_NAME_MAX 255
+#define HOST_NOT_FOUND 1
 #define HUGE 3.40282346638528859812e+38F
 #define HUGE_VAL ((double)INFINITY)
 #define HUGE_VALF INFINITY
@@ -681,7 +720,30 @@
 #define ICMP_UNREACH_TOSNET 11
 #define ICRNL 0000400
 #define IEXTEN 0100000
+#define IFF_ALLMULTI 0x200
+#define IFF_AUTOMEDIA 0x4000
+#define IFF_BROADCAST 0x2
+#define IFF_DEBUG 0x4
+#define IFF_DORMANT 0x20000
+#define IFF_DYNAMIC 0x8000
+#define IFF_ECHO 0x40000
+#define IFF_LOOPBACK 0x8
+#define IFF_LOWER_UP 0x10000
+#define IFF_MASTER 0x400
+#define IFF_MULTICAST 0x1000
+#define IFF_NOARP 0x80
+#define IFF_NOTRAILERS 0x20
+#define IFF_POINTOPOINT 0x10
+#define IFF_PORTSEL 0x2000
+#define IFF_PROMISC 0x100
+#define IFF_RUNNING 0x40
+#define IFF_SLAVE 0x800
+#define IFF_UP 0x1
+#define IFF_VOLATILE (IFF_LOOPBACK|IFF_POINTOPOINT|IFF_BROADCAST| IFF_ECHO|IFF_MASTER|IFF_SLAVE|IFF_RUNNING|IFF_LOWER_UP|IFF_DORMANT)
+#define IFHWADDRLEN 6
+#define IFNAMSIZ IF_NAMESIZE
 #define IFTODT(x) (__wasilibc_iftodt(x))
+#define IF_NAMESIZE 16
 #define IGMP_AWAKENING_MEMBER 5
 #define IGMP_DELAYING_MEMBER 1
 #define IGMP_DVMRP 0x13
@@ -1127,6 +1189,7 @@
 #define LFLOW_ON 1
 #define LFLOW_RESTART_ANY 2
 #define LFLOW_RESTART_XON 3
+#define LINE_MAX 4096
 #define LITTLE_ENDIAN __LITTLE_ENDIAN
 #define LLONG_MAX 0x7fffffffffffffffLL
 #define LLONG_MIN (-LLONG_MAX-1)
@@ -1138,6 +1201,7 @@
 #define LOCK_NB 4
 #define LOCK_SH 1
 #define LOCK_UN 8
+#define LOGIN_NAME_MAX 256
 #define LONGBITS (sizeof(long) * 8)
 #define LONG_BIT 32
 #define LONG_MAX __LONG_MAX
@@ -1253,10 +1317,18 @@
 #define MOREDATA 2
 #define MSG_ANY 0x02
 #define MSG_BAND 0x04
+#define MSG_CMSG_CLOEXEC 0x40000000
+#define MSG_CTRUNC 0x0008
+#define MSG_DONTROUTE 0x0004
+#define MSG_DONTWAIT 0x0040
+#define MSG_EOR 0x0080
 #define MSG_HIPRI 0x01
-#define MSG_PEEK __WASI_RIFLAGS_RECV_PEEK
-#define MSG_TRUNC __WASI_ROFLAGS_RECV_DATA_TRUNCATED
-#define MSG_WAITALL __WASI_RIFLAGS_RECV_WAITALL
+#define MSG_MORE 0x8000
+#define MSG_NOSIGNAL 0x4000
+#define MSG_OOB 0x0001
+#define MSG_PEEK 0x0002
+#define MSG_TRUNC 0x0020
+#define MSG_WAITALL 0x0100
 #define MUXID_ALL (-1)
 #define M_1_PI 0.31830988618379067154
 #define M_2_PI 0.63661977236758134308
@@ -1302,6 +1374,14 @@
 #define NEW_ENV_VAR 0
 #define NGROUPS 32
 #define NGROUPS_MAX 32
+#define NI_DGRAM 0x10
+#define NI_MAXHOST 255
+#define NI_MAXSERV 32
+#define NI_NAMEREQD 0x08
+#define NI_NOFQDN 0x04
+#define NI_NUMERICHOST 0x01
+#define NI_NUMERICSCOPE 0x100
+#define NI_NUMERICSERV 0x02
 #define NL0 0000000
 #define NL1 0000400
 #define NLDLY 0000400
@@ -1324,6 +1404,9 @@
 #define NOTAUTH ns_r_notauth
 #define NOTIMP ns_r_notimpl
 #define NOTZONE ns_r_notzone
+#define NO_ADDRESS NO_DATA
+#define NO_DATA 4
+#define NO_RECOVERY 3
 #define NR_ICMP_TYPES 18
 #define NR_ICMP_UNREACH 15
 #define NSIG _NSIG
@@ -1490,8 +1573,11 @@
 #define PATH_MAX 4096
 #define PDP_ENDIAN __PDP_ENDIAN
 #define PENDIN 0040000
+#define PF_FILE PF_LOCAL
 #define PF_INET 1
 #define PF_INET6 2
+#define PF_LOCAL 3
+#define PF_UNIX PF_LOCAL
 #define PF_UNSPEC 0
 #define PIPE_BUF 4096
 #define PM_STR 0x20027
@@ -1720,6 +1806,8 @@
 #define SB 250
 #define SCHAR_MAX 127
 #define SCHAR_MIN (-128)
+#define SCM_CREDENTIALS 0x02
+#define SCM_RIGHTS 0x01
 #define SCNd16 __INT16_FMTd__
 #define SCNd32 __INT32_FMTd__
 #define SCNd64 __INT64_FMTd__
@@ -1805,6 +1893,7 @@
 #define SEM_NSEMS_MAX 256
 #define SEM_VALUE_MAX 0x7fffffff
 #define SERVFAIL ns_r_servfail
+#define SHADOW "/etc/shadow"
 #define SHORTBITS (sizeof(short) * 8)
 #define SHRT_MAX 0x7fff
 #define SHRT_MIN (-1-0x7fff)
@@ -1910,9 +1999,30 @@
 #define SOCK_DGRAM 5
 #define SOCK_NONBLOCK (0x00004000)
 #define SOCK_STREAM 6
+#define SOL_IP 0
+#define SOL_IPV6 41
 #define SOL_SOCKET 0x7fffffff
 #define SOL_TCP 6
 #define SOL_UDP 17
+#define SOMAXCONN 4096
+#define SO_ACCEPTCONN 30
+#define SO_BROADCAST 6
+#define SO_DEBUG 1
+#define SO_DOMAIN 39
+#define SO_DONTROUTE 5
+#define SO_ERROR 4
+#define SO_KEEPALIVE 9
+#define SO_LINGER 13
+#define SO_OOBINLINE 10
+#define SO_PROTOCOL 38
+#define SO_RCVBUF 8
+#define SO_RCVLOWAT 18
+#define SO_RCVTIMEO 66
+#define SO_REUSEADDR 2
+#define SO_REUSEPORT 15
+#define SO_SNDBUF 7
+#define SO_SNDLOWAT 19
+#define SO_SNDTIMEO 67
 #define SO_TYPE 3
 #define SSIZE_MAX LONG_MAX
 #define SS_AUTODISARM (1U << 31)
@@ -2187,6 +2297,7 @@
 #define TRAP_HWBKPT 4
 #define TRAP_TRACE 2
 #define TRAP_UNK 5
+#define TRY_AGAIN 2
 #define TSGID 02000
 #define TSS_DTOR_ITERATIONS 4
 #define TSUID 04000
@@ -2451,6 +2562,7 @@
 #define _GETOPT_H 
 #define _GLOB_H 
 #define _GNU_SOURCE 1
+#define _GRP_H 
 #define _ICONV_H 
 #define _IFADDRS_H 
 #define _ILP32 1
@@ -2458,6 +2570,10 @@
 #define _IOFBF 0
 #define _IOLBF 1
 #define _IONBF 2
+#define _IOT_ifconf _IOT(_IOTS(struct ifconf),1,0,0,0,0)
+#define _IOT_ifreq _IOT(_IOTS(char),IFNAMSIZ,_IOTS(char),16,0,0)
+#define _IOT_ifreq_int _IOT(_IOTS(char),IFNAMSIZ,_IOTS(int),1,0,0)
+#define _IOT_ifreq_short _IOT(_IOTS(char),IFNAMSIZ,_IOTS(short),1,0,0)
 #define _ISO646_H 
 #define _LANGINFO_H 
 #define _LIBGEN_H 
@@ -2467,6 +2583,7 @@
 #define _MATH_H 
 #define _MONETARY_H 
 #define _MQUEUE_H 
+#define _NETDB_H 
 #define _NETINET_ICMP6_H 
 #define _NETINET_IGMP_H 
 #define _NETINET_IN_H 
@@ -2477,6 +2594,7 @@
 #define _NETINET_TCP_H 
 #define _NETINET_UDP_H 
 #define _NETPACKET_PACKET_H 
+#define _NET_IF_H 
 #define _NL_LOCALE_NAME(cat) (((cat)<<16) | 0xffff)
 #define _NL_TYPES_H 
 #define _NSIG 65
@@ -2576,6 +2694,7 @@
 #define _POSIX_VERSION 200809L
 #define _PTHREAD_H 
 #define _PTRDIFF_T 
+#define _PWD_H 
 #define _REGEX_H 
 #define _SCHED_H 
 #define _SC_2_CHAR_TERM 95
@@ -2723,6 +2842,7 @@
 #define _SC_XOPEN_XPG4 100
 #define _SEARCH_H 
 #define _SEMAPHORE_H 
+#define _SHADOW_H 
 #define _SIGNAL_H 
 #define _SIZE_T 
 #define _SPAWN_H 
@@ -2807,6 +2927,8 @@
 #define __compiler_ATOMIC_WCHAR_T_LOCK_FREE 2
 #define __CLANG_MAX_ALIGN_T_DEFINED 
 #define __CMPLX(x,y,t) (__builtin_complex((t)(x), (t)(y)))
+#define __CMSG_LEN(cmsg) (((cmsg)->cmsg_len + sizeof(long) - 1) & ~(long)(sizeof(long) - 1))
+#define __CMSG_NEXT(cmsg) ((unsigned char *)(cmsg) + __CMSG_LEN(cmsg))
 #define __CONSTANT_CFSTRINGS__ 1
 #define __DBLCX(x) (__IS_CX(x) && sizeof(x) == sizeof(double complex))
 #define __DBL_DECIMAL_DIG__ 17
@@ -2985,6 +3107,7 @@
 #define __LDBL_MIN_EXP__ (-16381)
 #define __LITTLE_ENDIAN 1234
 #define __LITTLE_ENDIAN__ 1
+#define __MHDR_END(mhdr) ((unsigned char *)(mhdr)->msg_control + (mhdr)->msg_controllen)
 #define __NAMESER 19991006
 #define __NEED_FILE 
 #define __NEED___isoc_va_list 
@@ -3106,6 +3229,12 @@
 #define __STDC_VERSION__ 201710L
 #define __STDC__ 1
 #define __STDDEF_H 
+#define __UAPI_DEF_IF_IFCONF 0
+#define __UAPI_DEF_IF_IFMAP 0
+#define __UAPI_DEF_IF_IFNAMSIZ 0
+#define __UAPI_DEF_IF_IFREQ 0
+#define __UAPI_DEF_IF_NET_DEVICE_FLAGS 0
+#define __UAPI_DEF_IF_NET_DEVICE_FLAGS_LOWER_UP_DORMANT_ECHO 0
 #define __UAPI_DEF_IN6_ADDR 0
 #define __UAPI_DEF_IN6_ADDR_ALT 0
 #define __UAPI_DEF_IN6_PKTINFO 0
@@ -3550,6 +3679,8 @@
 #define glob64 glob
 #define glob64_t glob_t
 #define globfree64 globfree
+#define h_addr h_addr_list[0]
+#define h_errno (*__h_errno_location())
 #define howmany(n,d) (((n)+((d)-1))/(d))
 #define htobe16(x) __bswap16(x)
 #define htobe32(x) __bswap32(x)
@@ -3585,6 +3716,24 @@
 #define icmp_wpa icmp_hun.ih_rtradv.irt_wpa
 #define ifa_broadaddr ifa_ifu.ifu_broadaddr
 #define ifa_dstaddr ifa_ifu.ifu_dstaddr
+#define ifc_buf ifc_ifcu.ifcu_buf
+#define ifc_req ifc_ifcu.ifcu_req
+#define ifr_addr ifr_ifru.ifru_addr
+#define ifr_bandwidth ifr_ifru.ifru_ivalue
+#define ifr_broadaddr ifr_ifru.ifru_broadaddr
+#define ifr_data ifr_ifru.ifru_data
+#define ifr_dstaddr ifr_ifru.ifru_dstaddr
+#define ifr_flags ifr_ifru.ifru_flags
+#define ifr_hwaddr ifr_ifru.ifru_hwaddr
+#define ifr_ifindex ifr_ifru.ifru_ivalue
+#define ifr_map ifr_ifru.ifru_map
+#define ifr_metric ifr_ifru.ifru_ivalue
+#define ifr_mtu ifr_ifru.ifru_mtu
+#define ifr_name ifr_ifrn.ifrn_name
+#define ifr_netmask ifr_ifru.ifru_netmask
+#define ifr_newname ifr_ifru.ifru_newname
+#define ifr_qlen ifr_ifru.ifru_ivalue
+#define ifr_slave ifr_ifru.ifru_slave
 #define ilogb(x) __tg_real_nocast(ilogb, (x))
 #define ino64_t ino_t
 #define ip6_flow ip6_ctlun.ip6_un1.ip6_un1_flow

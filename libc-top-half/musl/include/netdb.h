@@ -125,6 +125,9 @@ __attribute__((const))
 #if !defined(__wasip1__) && !defined(__wasip2__)
 int *__h_errno_location(void);
 #define h_errno (*__h_errno_location())
+#elif defined(__wasilibc_browseros)
+int *__h_errno_location(void);
+#define h_errno (*__h_errno_location())
 #elif !(defined __wasip1__)
 extern _Thread_local int h_errno;
 #define h_errno h_errno

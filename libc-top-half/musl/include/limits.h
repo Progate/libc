@@ -72,13 +72,13 @@
 #ifdef __wasilibc_unmodified_upstream /* WASI has no mq */
 #define MQ_PRIO_MAX 32768
 #endif
-#ifdef __wasilibc_unmodified_upstream /* WASI has no usernames */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no usernames */
 #define LOGIN_NAME_MAX 256
 #endif
 
 /* Arbitrary numbers... */
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no shell commands */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no shell commands */
 #define BC_BASE_MAX 99
 #define BC_DIM_MAX 2048
 #define BC_SCALE_MAX 99
@@ -86,7 +86,7 @@
 #endif
 #define CHARCLASS_NAME_MAX 14
 #define COLL_WEIGHTS_MAX 2
-#ifdef __wasilibc_unmodified_upstream /* WASI has no shell commands */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no shell commands */
 #define EXPR_NEST_MAX 32
 #define LINE_MAX 4096
 #endif

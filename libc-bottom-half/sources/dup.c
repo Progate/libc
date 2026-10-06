@@ -6,6 +6,13 @@
 #ifdef __wasip1__
 // BrowserOS: dup は同じ開いたファイルの記述を指す fd を作る（位置・O_NONBLOCK を共有する）。→ browseros/host.h
 #include <browseros/host.h>
+#include <browseros/libc.h>
+
+// dup で作った番号へ、ソケットとして覚えていたことを写す（ソケットを使わないプログラムには socket.c が入らない）
+static void copy_socket(int fd, int newfd) {
+  if (__browseros_socket_copy)
+    __browseros_socket_copy(fd, newfd);
+}
 #endif
 
 int dup(int fd) {
@@ -16,6 +23,7 @@ int dup(int fd) {
     errno = error;
     return -1;
   }
+  copy_socket(fd, newfd);
   return newfd;
 #else
   return descriptor_table_dup(fd, DUP_OP_DUP, 0);
@@ -29,6 +37,8 @@ int dup2(int fd, int newfd) {
     errno = error;
     return -1;
   }
+  if (fd != newfd)
+    copy_socket(fd, newfd);
   return newfd;
 #else
   return descriptor_table_dup(fd, DUP_OP_DUP2, newfd);

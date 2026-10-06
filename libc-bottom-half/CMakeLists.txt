@@ -139,21 +139,21 @@ set(bottom_half_sources
 )
 
 if (WASI STREQUAL "p1")
+  # ソケットはカーネルのソケット表を使う browseros/socket.c が持つ（accept・recv・send・getsockopt を含む）
   list(APPEND bottom_half_sources
-    cloudlibc/src/libc/sys/socket/getsockopt.c
-    cloudlibc/src/libc/sys/socket/recv.c
-    cloudlibc/src/libc/sys/socket/send.c
     cloudlibc/src/libc/sys/socket/shutdown.c
-    sources/accept-wasip1.c
     sources/browseros/atfork.c
     sources/browseros/clocks.c
     sources/browseros/create.c
     sources/browseros/directory.c
     sources/browseros/flock.c
+    sources/browseros/interfaces.c
     sources/browseros/loadavg.c
+    sources/browseros/netdb.c
     sources/browseros/popen.c
     sources/browseros/process.c
     sources/browseros/signal.c
+    sources/browseros/socket.c
     sources/browseros/spawn.c
     sources/browseros/temp.c
     sources/browseros/termios.c

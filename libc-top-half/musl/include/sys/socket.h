@@ -398,17 +398,17 @@ struct sockaddr_storage {
 #include <__struct_sockaddr_storage.h>
 #endif
 
-#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__)
+#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__) || (defined __wasilibc_browseros)
 int socket (int, int, int);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no socketpair */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no socketpair */
 int socketpair (int, int, int, int [2]);
 #endif
 
 int shutdown (int, int);
 
-#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__)
+#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__) || (defined __wasilibc_browseros)
 int connect (int, const struct sockaddr *, socklen_t);
 int bind (int, const struct sockaddr *, socklen_t);
 int listen (int, int);
@@ -417,28 +417,28 @@ int listen (int, int);
 int accept (int, struct sockaddr *__restrict, socklen_t *__restrict);
 int accept4(int, struct sockaddr *__restrict, socklen_t *__restrict, int);
 
-#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__)
+#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__) || (defined __wasilibc_browseros)
 int getsockname (int, struct sockaddr *__restrict, socklen_t *__restrict);
 int getpeername (int, struct sockaddr *__restrict, socklen_t *__restrict);
 #endif
 
 ssize_t send (int, const void *, size_t, int);
 ssize_t recv (int, void *, size_t, int);
-#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__)
+#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__) || (defined __wasilibc_browseros)
 ssize_t sendto (int, const void *, size_t, int, const struct sockaddr *, socklen_t);
 ssize_t recvfrom (int, void *__restrict, size_t, int, struct sockaddr *__restrict, socklen_t *__restrict);
 #endif
-#ifdef __wasilibc_unmodified_upstream /* WASI has no sendmsg/recvmsg */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no sendmsg/recvmsg */
 ssize_t sendmsg (int, const struct msghdr *, int);
 ssize_t recvmsg (int, struct msghdr *, int);
 #endif
 
 int getsockopt (int, int, int, void *__restrict, socklen_t *__restrict);
-#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__)
+#if (defined __wasilibc_unmodified_upstream) || !(defined __wasip1__) || (defined __wasilibc_browseros)
 int setsockopt (int, int, int, const void *, socklen_t);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no sockatmark */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no sockatmark */
 int sockatmark (int);
 #endif
 

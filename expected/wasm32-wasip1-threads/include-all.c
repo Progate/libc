@@ -88,6 +88,7 @@
 #include <ftw.h>
 #include <getopt.h>
 #include <glob.h>
+#include <grp.h>
 #include <iconv.h>
 #include <ifaddrs.h>
 #include <inttypes.h>
@@ -101,6 +102,8 @@
 #include <memory.h>
 #include <monetary.h>
 #include <mqueue.h>
+#include <net/if.h>
+#include <netdb.h>
 #include <netinet/icmp6.h>
 #include <netinet/igmp.h>
 #include <netinet/in.h>
@@ -114,10 +117,12 @@
 #include <nl_types.h>
 #include <poll.h>
 #include <pthread.h>
+#include <pwd.h>
 #include <regex.h>
 #include <sched.h>
 #include <search.h>
 #include <semaphore.h>
+#include <shadow.h>
 #include <spawn.h>
 #include <stdalign.h>
 #include <stdbool.h>

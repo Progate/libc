@@ -155,16 +155,15 @@ list(REMOVE_ITEM globbed_headers
   musl/include/wordexp.h
 )
 
-# Exclude `netdb.h` from all of the p1 targets.
-if(WASI STREQUAL "p1")
-  list(REMOVE_ITEM globbed_headers
-    musl/include/netdb.h
-  )
-endif()
-
-# BrowserOS の libc（p1）は、カーネルのホスト関数で posix_spawn と waitpid を持つ（→ libc-bottom-half/sources/browseros）
+# BrowserOS の libc（p1）は、カーネルのホスト関数で posix_spawn と waitpid を持つ（→ libc-bottom-half/sources/browseros）。
+# ソケットと名前解決（netdb.h・net/if.h）はカーネルのソケット表で、利用者とグループの表（pwd.h・grp.h）は
+# /etc/passwd・/etc/group を読む musl のもので持つ
 if(WASI STREQUAL "p1")
   list(APPEND globbed_headers
+    musl/include/grp.h
+    musl/include/net/if.h
+    musl/include/pwd.h
+    musl/include/shadow.h
     musl/arch/generic/bits/termios.h
     musl/include/spawn.h
     musl/include/sys/termios.h
@@ -496,6 +495,42 @@ if (WASI STREQUAL "p1")
     musl/src/termios/cfmakeraw.c
     musl/src/termios/cfsetospeed.c
     musl/src/termios/cfsetspeed.c
+    # 名前解決のうち、カーネルに頼らないもの（エラーの文・プロトコルの表・/etc/services）。名前と番地の
+    # 解決は libc-bottom-half/sources/browseros/netdb.c
+    musl/src/network/ent.c
+    musl/src/network/gai_strerror.c
+    musl/src/network/getservbyname.c
+    musl/src/network/getservbyname_r.c
+    musl/src/network/getservbyport.c
+    musl/src/network/getservbyport_r.c
+    musl/src/network/h_errno.c
+    musl/src/network/herror.c
+    musl/src/network/hstrerror.c
+    musl/src/network/lookup_serv.c
+    musl/src/network/netname.c
+    musl/src/network/proto.c
+    musl/src/network/serv.c
+    # 利用者とグループの表（/etc/passwd・/etc/group）。nscd へは UNIX ドメインのソケットで尋ね、居なければ見つからない扱い
+    musl/src/passwd/fgetgrent.c
+    musl/src/passwd/fgetpwent.c
+    musl/src/passwd/fgetspent.c
+    musl/src/passwd/getgr_a.c
+    musl/src/passwd/getgr_r.c
+    musl/src/passwd/getgrent.c
+    musl/src/passwd/getgrent_a.c
+    musl/src/passwd/getgrouplist.c
+    musl/src/passwd/getpw_a.c
+    musl/src/passwd/getpw_r.c
+    musl/src/passwd/getpwent.c
+    musl/src/passwd/getpwent_a.c
+    musl/src/passwd/getspent.c
+    musl/src/passwd/getspnam.c
+    musl/src/passwd/getspnam_r.c
+    musl/src/passwd/lckpwdf.c
+    musl/src/passwd/nscd_query.c
+    musl/src/passwd/putgrent.c
+    musl/src/passwd/putpwent.c
+    musl/src/passwd/putspent.c
   )
 endif()
 
