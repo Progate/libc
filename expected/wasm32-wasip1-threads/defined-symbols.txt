@@ -1340,6 +1340,7 @@ setbuf
 setbuffer
 setenv
 setgrent
+setgroups
 sethostent
 setkey
 setlinebuf
