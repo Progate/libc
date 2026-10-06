@@ -97,7 +97,7 @@ struct tm *localtime_r (const time_t *__restrict, struct tm *__restrict);
 char *asctime_r (const struct tm *__restrict, char *__restrict);
 char *ctime_r (const time_t *, char *);
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no timezone tables */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no timezone tables */
 void tzset (void);
 #endif
 
@@ -143,7 +143,7 @@ int timer_gettime (timer_t, struct itimerspec *);
 int timer_getoverrun (timer_t);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no timezone tables */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no timezone tables */
 extern char *tzname[2];
 #endif
 
@@ -152,7 +152,7 @@ extern char *tzname[2];
 
 #if defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 char *strptime (const char *__restrict, const char *__restrict, struct tm *__restrict);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no timezone tables */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no timezone tables */
 extern int daylight;
 extern long timezone;
 #endif

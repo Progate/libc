@@ -430,6 +430,22 @@ static void __tzset()
 
 weak_alias(__tzset, tzset);
 #else
+#ifdef __wasilibc_browseros
+// BrowserOS の libc は時刻帯の表を持たず、localtime はいつも UTC で答える。POSIX が求める tzset と
+// tzname・timezone・daylight はその答えのとおりに置く（読み込むものが無いので tzset は何もしない）
+char *__tzname[2] = { (char *)__utc, (char *)__utc };
+long __timezone = 0;
+int __daylight = 0;
+
+weak_alias(__timezone, timezone);
+weak_alias(__daylight, daylight);
+weak_alias(__tzname, tzname);
+
+void tzset(void)
+{
+}
+#endif
+
 void __secs_to_zone(long long t, int local, int *isdst, int *offset, long *oppoff, const char **zonename)
 {
 	// Minimalist implementation for now.
