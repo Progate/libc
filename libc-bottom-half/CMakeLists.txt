@@ -145,8 +145,10 @@ if (WASI STREQUAL "p1")
     cloudlibc/src/libc/sys/socket/send.c
     cloudlibc/src/libc/sys/socket/shutdown.c
     sources/accept-wasip1.c
+    sources/browseros/atfork.c
     sources/browseros/clocks.c
     sources/browseros/create.c
+    sources/browseros/directory.c
     sources/browseros/flock.c
     sources/browseros/loadavg.c
     sources/browseros/popen.c

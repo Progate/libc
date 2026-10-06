@@ -35,6 +35,10 @@ __BROWSEROS_IMPORT("browser_os_fs", "fchmod")
 int32_t __browseros_fchmod(int32_t fd, uint32_t mode);
 __BROWSEROS_IMPORT("browser_os_fs", "chmod_at")
 int32_t __browseros_chmod_at(int32_t dirfd, const char *path, uint32_t path_len, uint32_t mode);
+// fchdir(2) のカーネル側。fd が指すディレクトリのいまの絶対パスを返す（作業ディレクトリの持ち主は libc なので、
+// 移るのは libc の chdir）。名前を失ったディレクトリは ENOENT
+__BROWSEROS_IMPORT("browser_os_fs", "fchdir")
+int32_t __browseros_fchdir(int32_t fd, char *path, uint32_t size, uint32_t *length);
 
 // browser_os_tty（端末。state は ICANON を落としているか・ECHO・ISIG の i32 3 つ）
 
