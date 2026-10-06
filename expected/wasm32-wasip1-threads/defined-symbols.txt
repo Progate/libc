@@ -750,6 +750,7 @@ fread
 fread_unlocked
 free
 freeaddrinfo
+freeifaddrs
 freelocale
 freopen
 freopen64
@@ -822,6 +823,7 @@ gethostbyname_r
 gethostent
 gethostid
 gethostname
+getifaddrs
 getline
 getloadavg
 getnameinfo
