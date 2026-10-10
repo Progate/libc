@@ -93,6 +93,12 @@ int32_t __browseros_set_handlers(uint64_t caught);
 __BROWSEROS_IMPORT("browser_os_process", "exit_signal")
 int32_t __browseros_exit_signal(int32_t signal);
 
+/// fork(2)。呼んだプロセスを写して子を作り、親には子の pid、子には 0 を `pid` に書く。積み重なりを写すために、
+/// プログラムは asyncify（`wasm-opt --asyncify`）で組んである必要がある（組んでいなければ ENOSYS）。`asyncify_data` は
+/// asyncify が積み重なりを書き出す場所で、先頭の 2 語が「いまの位置」と「終わり」（→ fork/fork.c）
+__BROWSEROS_IMPORT("browser_os_process", "fork")
+int32_t __browseros_fork(void *asyncify_data, int32_t *pid);
+
 /// posix_spawnp の file actions の種類（バイト列の op。browser-os の process/wasi-spawn.ts と同じ番号）
 #define __BROWSEROS_SPAWN_OPEN 1
 #define __BROWSEROS_SPAWN_CLOSE 2

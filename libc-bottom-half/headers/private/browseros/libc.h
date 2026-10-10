@@ -33,4 +33,7 @@ void __browseros_socket_forget(int fd) __attribute__((__weak__));
 /// fd の複製に、ソケットとして覚えていたことを写す。→ socket.c
 void __browseros_socket_copy(int from, int to) __attribute__((__weak__));
 
+/// pthread_atfork(3) で登録した処理を走らせる。`phase` は 0 が fork の前（登録の逆順）、1 が親、2 が子（登録の順）。→ atfork.c
+void __browseros_run_atfork(int phase);
+
 #endif

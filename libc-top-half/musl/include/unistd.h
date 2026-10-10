@@ -132,8 +132,10 @@ unsigned sleep(unsigned);
 int pause(void);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no fork/exec */
+#if defined(__wasilibc_unmodified_upstream) || (defined(__wasilibc_browseros) && defined(_BROWSEROS_FORK)) /* BrowserOS: asyncify で組み、-lbrowseros-fork を付けたプログラムだけ */
 pid_t fork(void);
+#endif
+#ifdef __wasilibc_unmodified_upstream /* WASI has no fork/exec */
 pid_t _Fork(void);
 int execve(const char *, char *const [], char *const []);
 int execv(const char *, char *const []);

@@ -1,6 +1,7 @@
 add_subdirectory(clocks)
 add_subdirectory(mman)
 add_subdirectory(getpid)
+add_subdirectory(fork)
 add_subdirectory(signal)
 
 # =============================================================================

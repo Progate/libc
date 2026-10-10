@@ -24,6 +24,7 @@ __browseros_name_of_address
 __browseros_nocwd_mkdirat
 __browseros_nocwd_openat
 __browseros_report_signals
+__browseros_run_atfork
 __browseros_signal
 __browseros_socket_copy
 __browseros_socket_forget
@@ -735,6 +736,7 @@ fnmatch
 fopen
 fopen64
 fopencookie
+fork
 fpathconf
 fprintf
 fpurge
