@@ -1,8 +1,12 @@
 // 端末: termios(3)（tcgetattr・tcsetattr ほか）・tcgetwinsize・isatty(3)。
 //
 // 端末そのもの（行編集・エコー・Ctrl+C を SIGINT にするか）は BrowserOS のカーネルが持ち、ホスト関数
-// （browser_os_tty）で ICANON・ECHO・ISIG の 3 つだけをやり取りする（→ browser-os の src/wasi/tty.ts）。
-// struct termios のほかの欄はカーネルが使わないので、最後に設定されたものを libc が覚えて返す。
+// （browser_os_tty）で ICANON・ECHO・ISIG の 3 つと、出力の改行変換（OPOST かつ ONLCR）をやり取りする
+// （→ browser-os の src/wasi/tty.ts）。struct termios のほかの欄はカーネルが使わないので、最後に設定されたものを
+// libc が覚えて返す。
+//
+// 改行変換は ICANON とは別の設定である（Linux と同じ）。libuv の raw モード（node の setRawMode）は ICANON を
+// 落としても ONLCR を残し、`\n` だけを書く。cfmakeraw（vim）は OPOST ごと落とし、`\r\n` を自分で書く。
 //
 // isatty は「その fd に tcgetattr できるか」で決める（musl と同じ）。wasi-libc の isatty は WASI の
 // 種別（文字デバイス）で決めるので、パイプやファイルに向いた標準出力も端末に見え、stdio が行ごとに
@@ -61,6 +65,14 @@ int tcgetattr(int fd, struct termios *out) {
   current.c_lflag = state.raw ? current.c_lflag & ~(tcflag_t)ICANON : current.c_lflag | ICANON;
   current.c_lflag = state.echo ? current.c_lflag | ECHO : current.c_lflag & ~(tcflag_t)ECHO;
   current.c_lflag = state.isig ? current.c_lflag | ISIG : current.c_lflag & ~(tcflag_t)ISIG;
+  /*
+   * 改行変換もいまの値にする。変換していれば OPOST と ONLCR を立て、していなければ ONLCR を落とす
+   * （OPOST だけ残っているのは「ほかの出力処理はするが改行は変えない」で、この端末の振る舞いと食い違わない）。
+   * この口を持たないカーネル（ENOSYS）では、最後に設定されたものをそのまま返す
+   */
+  int32_t onlcr;
+  if (__browseros_tty_get_onlcr(fd, &onlcr) == 0)
+    current.c_oflag = onlcr ? current.c_oflag | OPOST | ONLCR : current.c_oflag & ~(tcflag_t)ONLCR;
   *out = current;
   return 0;
 }
@@ -79,6 +91,13 @@ int tcsetattr(int fd, int actions, const struct termios *in) {
   };
   int32_t error = __browseros_tcsetattr(fd, actions, (const int32_t *)&state);
   if (error)
+    return fail(error);
+  /*
+   * 改行変換は 3 つのあとに別の口で決める（3 つを設定すると、カーネルは変換を ICANON に連動させた値へ戻す）。
+   * この口を持たないカーネルは ENOSYS を返し、変換は ICANON に連動したままになる。そこは失敗にしない
+   */
+  error = __browseros_tty_set_onlcr(fd, (in->c_oflag & OPOST) && (in->c_oflag & ONLCR));
+  if (error && error != ENOSYS)
     return fail(error);
   current = *in;
   current_valid = 1;

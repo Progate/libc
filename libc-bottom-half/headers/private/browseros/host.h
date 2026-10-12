@@ -48,6 +48,12 @@ __BROWSEROS_IMPORT("browser_os_tty", "tcsetattr")
 int32_t __browseros_tcsetattr(int32_t fd, int32_t actions, const int32_t *state);
 __BROWSEROS_IMPORT("browser_os_tty", "ioctl")
 int32_t __browseros_tty_ioctl(int32_t fd, int32_t request, void *arg);
+/// 出力の改行変換（OPOST かつ ONLCR。書いた `\n` を端末が `\r\n` にするか）。ICANON とは別の設定なので、
+/// state の 3 つとは別の口にしてある。この口を持たないカーネルでは ENOSYS が返り、変換は ICANON に連動したままになる
+__BROWSEROS_IMPORT("browser_os_tty", "set_onlcr")
+int32_t __browseros_tty_set_onlcr(int32_t fd, int32_t enabled);
+__BROWSEROS_IMPORT("browser_os_tty", "get_onlcr")
+int32_t __browseros_tty_get_onlcr(int32_t fd, int32_t *enabled);
 
 // browser_os_process
 

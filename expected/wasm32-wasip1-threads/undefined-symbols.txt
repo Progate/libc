@@ -32,7 +32,9 @@ __browseros_sock_setsockopt
 __browseros_stat_at
 __browseros_tcgetattr
 __browseros_tcsetattr
+__browseros_tty_get_onlcr
 __browseros_tty_ioctl
+__browseros_tty_set_onlcr
 __browseros_wait
 __data_end
 __divtf3
