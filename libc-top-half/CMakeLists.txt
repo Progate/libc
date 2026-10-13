@@ -68,6 +68,10 @@ list(REMOVE_ITEM globbed_headers
   # Use the WASI errno definitions.
   musl/arch/generic/bits/errno.h
 
+  # Use the wasm32 floating-point environment, whose exception flags are kept
+  # in software.
+  musl/arch/generic/bits/fenv.h
+
   # Remove headers that aren't supported yet or that aren't relevant for WASI.
   musl/arch/generic/bits/dirent.h
   musl/arch/generic/bits/fcntl.h
@@ -209,7 +213,7 @@ set(top_half_sources
   musl/src/fcntl/creat.c
   musl/src/fenv/fegetexceptflag.c
   musl/src/fenv/feholdexcept.c
-  musl/src/fenv/fenv.c
+  musl/src/fenv/wasm32/fenv.c
   musl/src/fenv/fesetexceptflag.c
   musl/src/fenv/fesetround.c
   musl/src/fenv/feupdateenv.c
