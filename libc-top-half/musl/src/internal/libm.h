@@ -181,7 +181,9 @@ static inline void fp_force_evall(long double x)
 }
 #endif
 
-#ifdef __wasilibc_unmodified_upstream // WASI has no floating-point status flags
+// BrowserOS の libc は例外フラグをソフトウェアで持つ（→ src/fenv/wasm32/fenv.c）。フラグを立てるためだけの計算
+// （sin(x) の小さい x で inexact と underflow を立てるなど）を消すと fetestexcept に出ないので、upstream と同じく残す
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #define FORCE_EVAL(x) do {                        \
 	if (sizeof(x) == sizeof(float)) {         \
 		fp_force_evalf(x);                \
