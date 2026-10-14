@@ -353,6 +353,7 @@ endfunction()
 add_subdirectory(dlmalloc)
 add_subdirectory(emmalloc)
 add_subdirectory(fts)
+add_subdirectory(softfloat)
 add_subdirectory(libc-bottom-half)
 add_subdirectory(libc-top-half)
 
@@ -381,6 +382,7 @@ add_library(c SHARED EXCLUDE_FROM_ALL
   $<TARGET_OBJECTS:${malloc_target}-shared>
   $<TARGET_OBJECTS:bulk-memory-shared>
   $<TARGET_OBJECTS:fts-shared>
+  $<TARGET_OBJECTS:softfloat-shared>
   ${libc_extra_objects}
 )
 add_library(c-static STATIC EXCLUDE_FROM_ALL
@@ -390,6 +392,7 @@ add_library(c-static STATIC EXCLUDE_FROM_ALL
   $<TARGET_OBJECTS:${malloc_target}-static>
   $<TARGET_OBJECTS:bulk-memory-static>
   $<TARGET_OBJECTS:fts-static>
+  $<TARGET_OBJECTS:softfloat-static>
   ${libc_extra_objects}
 )
 add_dependencies(c sysroot-startup-objects builtins)
