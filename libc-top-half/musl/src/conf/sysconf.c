@@ -1,6 +1,45 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
+#if defined(__wasilibc_browseros) && !defined(__wasilibc_unmodified_upstream)
+#include <fcntl.h>
+
+// BrowserOS のカーネルは、ホストの論理 CPU の数を /proc/cpuinfo の `processor` の行として出している
+// （→ browser-os の fs/proc.ts）。WASI にはこの数を問い合わせる syscall が無いので、その行を数える。
+// 1 と決めて答えると、スレッドを持てる世界でも OpenMP の既定のスレッド数や Python の os.cpu_count() が 1 になり、
+// 並列に動くはずのプログラムが 1 本でしか動かない。/proc の無い世界では、upstream と同じく 1 と答える
+static long cpu_count(void)
+{
+	static const char key[] = "processor";
+	// sysconf は答えられたときに errno を変えない。/proc の無い世界の open の ENOENT を残さない
+	int saved_errno = errno;
+	int fd = open("/proc/cpuinfo", O_RDONLY | O_CLOEXEC);
+	if (fd < 0) {
+		errno = saved_errno;
+		return 1;
+	}
+	char buffer[512];
+	long count = 0;
+	// 行頭から key と一致した文字数。key の長さに達したら数え終わり、key の長さ + 1 はその行を数えない印
+	size_t matched = 0;
+	ssize_t length;
+	while ((length = read(fd, buffer, sizeof buffer)) > 0) {
+		for (ssize_t i = 0; i < length; i++) {
+			if (buffer[i] == '\n') {
+				matched = 0;
+			} else if (matched < sizeof key - 1) {
+				if (buffer[i] != key[matched])
+					matched = sizeof key;
+				else if (++matched == sizeof key - 1)
+					count++;
+			}
+		}
+	}
+	close(fd);
+	errno = saved_errno;
+	return count > 0 ? count : 1;
+}
+#endif
 #ifdef __wasilibc_unmodified_upstream // WASI has no process-level accounting
 #include <sys/resource.h>
 #endif
@@ -264,6 +303,8 @@ long sysconf(int name)
 		for (i=cnt=0; i<sizeof set; i++)
 			for (; set[i]; set[i]&=set[i]-1, cnt++);
 		return cnt;
+#elif defined(__wasilibc_browseros)
+		return cpu_count();
 #else
 		// WASI has no way to query the processor count
 		return 1;
