@@ -30,10 +30,23 @@ int __wasilibc_nocwd_fstatat(int fd, const char *restrict path, struct stat *res
   if ((flag & AT_SYMLINK_NOFOLLOW) == 0)
       lookup_flags |= __WASI_LOOKUPFLAGS_SYMLINK_FOLLOW;
 
-  // BrowserOS: filestat と権限のビットをカーネルに 1 度で聞く（→ fstat.c）。この FS にシンボリックリンクは無いので、
-  // lookup_flags（AT_SYMLINK_NOFOLLOW）で答えは変わらない
   __wasi_filestat_t internal_stat;
   uint32_t mode;
+  // BrowserOS: カーネルの stat_at は末尾のシンボリックリンクを辿る（stat）。lstat（AT_SYMLINK_NOFOLLOW）のときは、
+  // 辿らずに引ける preview1 の path_filestat_get で先にリンクかを見る。リンクを辿った先を答えると、CMake の install
+  // のようにリンクを lstat で見分けるプログラムが、リンクを中身の写しにしてしまう。リンクの権限は Linux と同じく 0777
+  if (flag & AT_SYMLINK_NOFOLLOW) {
+    int32_t error = __wasi_path_filestat_get(fd, 0, path, &internal_stat);
+    if (error == 0 && internal_stat.filetype == __WASI_FILETYPE_SYMBOLIC_LINK) {
+      to_public_stat(&internal_stat, buf);
+      buf->st_mode = S_IFLNK | 0777;
+      buf->st_uid = getuid();
+      buf->st_gid = getgid();
+      return 0;
+    }
+  }
+
+  // BrowserOS: filestat と権限のビットをカーネルに 1 度で聞く（→ fstat.c）
   int32_t error = __browseros_stat_at(fd, path, strlen(path), &internal_stat, &mode);
   int has_mode = error == 0;
   if (error == __WASI_ERRNO_NOTSUP || error == __WASI_ERRNO_NOSYS)
