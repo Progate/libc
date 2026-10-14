@@ -75,6 +75,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <dlfcn.h>
+#include <elf.h>
 #include <endian.h>
 #include <err.h>
 #include <errno.h>
@@ -96,6 +97,7 @@
 #include <langinfo.h>
 #include <libgen.h>
 #include <limits.h>
+#include <link.h>
 #include <locale.h>
 #include <malloc.h>
 #include <math.h>

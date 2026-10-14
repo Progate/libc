@@ -161,10 +161,14 @@ list(REMOVE_ITEM globbed_headers
 
 # BrowserOS の libc（p1）は、カーネルのホスト関数で posix_spawn と waitpid を持つ（→ libc-bottom-half/sources/browseros）。
 # ソケットと名前解決（netdb.h・net/if.h）はカーネルのソケット表で、利用者とグループの表（pwd.h・grp.h）は
-# /etc/passwd・/etc/group を読む musl のもので持つ
+# /etc/passwd・/etc/group を読む musl のもので持つ。dl_iterate_phdr（link.h と、その型を決める elf.h）は
+# libc-bottom-half/sources/browseros/dl_iterate_phdr.c が答え、動的ローダーを持つプログラムではそのゲスト側が置き換える
 if(WASI STREQUAL "p1")
   list(APPEND globbed_headers
+    musl/arch/generic/bits/link.h
+    musl/include/elf.h
     musl/include/grp.h
+    musl/include/link.h
     musl/include/net/if.h
     musl/include/pwd.h
     musl/include/shadow.h
