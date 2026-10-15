@@ -132,4 +132,25 @@ int32_t __browseros_fork(void *asyncify_data, int32_t *pid);
 #define __BROWSEROS_SPAWN_CHDIR 4
 #define __BROWSEROS_SPAWN_FCHDIR 5
 
+// browser_os_sem（名前つきセマフォ。値と待ち手はカーネルの表にある。→ browser-os の src/process/semaphores.ts）
+//
+// open の oflag は 1 が O_CREAT、2 が O_EXCL（libc の O_* の値ではない）。名前は先頭の `/` を外したもの。timedwait の deadline は CLOCK_REALTIME のナノ秒（sem_timedwait の abstime）で、
+// 負なら期限なし。待っているあいだにハンドラのあるシグナルが届けば EINTR で戻り、SA_RESTART でもやり直さない
+
+__BROWSEROS_IMPORT("browser_os_sem", "open")
+int32_t __browseros_ksem_open(const char *name, uint32_t name_len, int32_t oflag, uint32_t value, uint32_t *handle,
+                              uint32_t *id);
+__BROWSEROS_IMPORT("browser_os_sem", "close")
+int32_t __browseros_ksem_close(uint32_t handle);
+__BROWSEROS_IMPORT("browser_os_sem", "unlink")
+int32_t __browseros_ksem_unlink(const char *name, uint32_t name_len);
+__BROWSEROS_IMPORT("browser_os_sem", "timedwait")
+int32_t __browseros_ksem_timedwait(uint32_t handle, int64_t deadline);
+__BROWSEROS_IMPORT("browser_os_sem", "trywait")
+int32_t __browseros_ksem_trywait(uint32_t handle);
+__BROWSEROS_IMPORT("browser_os_sem", "post")
+int32_t __browseros_ksem_post(uint32_t handle);
+__BROWSEROS_IMPORT("browser_os_sem", "getvalue")
+int32_t __browseros_ksem_getvalue(uint32_t handle, int32_t *value);
+
 #endif

@@ -17,6 +17,13 @@ __browseros_getpid
 __browseros_getppid
 __browseros_initial_signals
 __browseros_kill
+__browseros_ksem_close
+__browseros_ksem_getvalue
+__browseros_ksem_open
+__browseros_ksem_post
+__browseros_ksem_timedwait
+__browseros_ksem_trywait
+__browseros_ksem_unlink
 __browseros_pipe2
 __browseros_posix_spawnp
 __browseros_set_handlers

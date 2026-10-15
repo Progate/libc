@@ -68,6 +68,8 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
   int error = ENOMEM;
   if (packed_argv && packed_env && (!bare || relative)) {
     __browseros_report_signals();
+    // 入れ替わると写しは消えるので、MAP_SHARED の写しに書いたものを先にファイルへ出す（→ memory_sync.c）
+    __browseros_memory_sync();
     error = __browseros_execve(file, strlen(file), packed_argv, argv_len, packed_env, env_len, cwd,
                                strlen(cwd));
   }

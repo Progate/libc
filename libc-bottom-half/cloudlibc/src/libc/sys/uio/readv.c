@@ -9,6 +9,9 @@
 #include <errno.h>
 #include <stddef.h>
 #include <unistd.h>
+#ifdef __wasilibc_browseros
+#include <browseros/libc.h>
+#endif
 
 #ifdef __wasip1__
 static_assert(offsetof(struct iovec, iov_base) ==
@@ -40,6 +43,11 @@ ssize_t readv(int fildes, const struct iovec *iov, int iovcnt) {
     errno = error;
     return -1;
   }
+#ifdef __wasilibc_browseros
+  // read と同じく、パイプ・ソケットから受けたら MAP_SHARED の写しを同期する
+  if (bytes_read > 0)
+    __browseros_memory_sync_fd(fildes);
+#endif
   return bytes_read;
 #elif defined(__wasip2__) || defined(__wasip3__)
   // Skip empty iovecs and then delegate to `read` with the first non-empty

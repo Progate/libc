@@ -5,6 +5,9 @@
 #include <wasi/api.h>
 #include <errno.h>
 #include <unistd.h>
+#ifdef __wasilibc_browseros
+#include <browseros/libc.h>
+#endif
 
 #ifndef __wasip1__
 #include <stddefer.h>
@@ -24,6 +27,11 @@ ssize_t read(int fildes, void *buf, size_t nbyte) {
     errno = error == ENOTCAPABLE ? EBADF : error;
     return -1;
   }
+#ifdef __wasilibc_browseros
+  // パイプ・ソケットから受けたら、送った側が MAP_SHARED の写しに書いたものを取り込む（→ memory_sync.c）
+  if (bytes_read > 0)
+    __browseros_memory_sync_fd(fildes);
+#endif
   return bytes_read;
 #else
   descriptor_table_entry_t entry;

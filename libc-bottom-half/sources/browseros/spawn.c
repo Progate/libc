@@ -420,11 +420,14 @@ static int spawn(pid_t *restrict pid, const char *restrict file,
 int posix_spawn(pid_t *restrict pid, const char *restrict path,
                 const posix_spawn_file_actions_t *fa, const posix_spawnattr_t *restrict attr,
                 char *const argv[restrict], char *const envp[restrict]) {
+  // 子が始まる前に、MAP_SHARED の写しに書いたものを出しておく（子は写しをファイルから読む。→ memory_sync.c）
+  __browseros_memory_sync();
   return spawn(pid, path, fa, attr, argv, envp, 0);
 }
 
 int posix_spawnp(pid_t *restrict pid, const char *restrict file,
                  const posix_spawn_file_actions_t *fa, const posix_spawnattr_t *restrict attr,
                  char *const argv[restrict], char *const envp[restrict]) {
+  __browseros_memory_sync();
   return spawn(pid, file, fa, attr, argv, envp, 1);
 }

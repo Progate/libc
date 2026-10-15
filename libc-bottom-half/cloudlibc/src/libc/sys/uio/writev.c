@@ -42,6 +42,10 @@ ssize_t writev(int fildes, const struct iovec *iov, int iovcnt) {
 
 #if defined(__wasip1__)
   size_t bytes_written = 0;
+#ifdef __wasilibc_browseros
+  // write と同じく、パイプ・ソケットへ送る前に MAP_SHARED の写しを同期する
+  __browseros_memory_sync_fd(fildes);
+#endif
   __wasi_errno_t error = __wasi_fd_write(
       fildes, (const __wasi_ciovec_t *)iov, iovcnt, &bytes_written);
   if (error != 0) {
