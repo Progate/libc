@@ -559,6 +559,13 @@ if (TARGET_TRIPLE MATCHES "wasip1-threads")
     musl/src/thread/wasi-threads/wasi_thread_start.s
     musl/src/thread/wasi-threads/__wasilibc_busywait.c
   )
+  # BrowserOS: スレッドの名前は libc が持つ（協調スレッド版と同じ実装。Linux の /proc/self/task/*/comm は無い）
+  if(WASI STREQUAL "p1")
+    list(APPEND top_half_sources
+      musl/src/thread/coop-threads/pthread_getname_np.c
+      musl/src/thread/coop-threads/pthread_setname_np.c
+    )
+  endif()
 elseif(ENABLE_COOP_THREADS)
   # cooperative threads implementation for WASI Preview 3
   list(APPEND top_half_sources

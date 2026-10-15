@@ -70,6 +70,9 @@ struct pthread {
 	void *stdio_locks;
 	#ifdef __wasi_cooperative_threads__
 	volatile int joiner_futex;
+	#endif
+	#if defined(__wasi_cooperative_threads__) || defined(__wasilibc_browseros)
+	/* BrowserOS: カーネルはスレッドの名前を持たないので、libc が持つ（→ pthread_setname_np） */
 	char name[16];
 	#endif
 
