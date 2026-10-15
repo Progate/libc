@@ -20,10 +20,20 @@
 #define O_SEARCH (0x08000000)
 #define O_WRONLY (0x10000000)
 
+#ifdef __wasip1__
+/*
+ * BrowserOS のカーネルの execve は close-on-exec の立った fd を閉じるので、O_CLOEXEC は本物の印である
+ * （→ libc-bottom-half/headers/private/browseros/host.h の getfd / setfd）。ほかの O_* と重ならないビットに置く
+ * （下の 12 ビットは WASI の fdflags、その上の 12 ビットは WASI の oflags、0x01000000 から上は O_NOFOLLOW と向き）。
+ * open は path_open へ渡す前に外し、開いた fd に FD_CLOEXEC を立てる
+ */
+#define O_CLOEXEC (0x20000000)
+#else
 /*
  * O_CLOEXEC is defined to be zero, as WASI has no exec-style functions.
  */
 #define O_CLOEXEC (0)
+#endif
 
 /*
  * O_TTY_INIT is defined to be zero, meaning that WASI implementations are

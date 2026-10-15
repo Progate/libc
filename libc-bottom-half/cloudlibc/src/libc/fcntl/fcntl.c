@@ -44,15 +44,51 @@ int fcntl(int fildes, int cmd, ...) {
       // 複製にもソケットとして覚えていたことを写す（→ browseros/socket.c）
       if (__browseros_socket_copy)
         __browseros_socket_copy(fildes, newfd);
+      // 複製した fd に close-on-exec は立たない。F_DUPFD_CLOEXEC だけが立てる（fcntl(2)）
+      if (cmd == F_DUPFD_CLOEXEC)
+        __browseros_setfd(newfd, FD_CLOEXEC);
       return newfd;
     }
-#endif
+    case F_GETFD: {
+      // BrowserOS: close-on-exec は fd の番号ごとにカーネルが持つ（→ browseros/host.h の getfd）
+      int32_t flags;
+      int32_t error = __browseros_getfd(fildes, &flags);
+      if (error == ENOSYS) {
+        // この口を持たないカーネルは close-on-exec を持たない。開いている fd なら印は無い
+        __wasi_fdstat_t fds;
+        error = __wasi_fd_fdstat_get(fildes, &fds);
+        flags = 0;
+      }
+      if (error != 0) {
+        errno = error;
+        return -1;
+      }
+      return flags;
+    }
+    case F_SETFD: {
+      va_list ap;
+      va_start(ap, cmd);
+      int flags = va_arg(ap, int);
+      va_end(ap);
+      int32_t error = __browseros_setfd(fildes, flags & FD_CLOEXEC);
+      if (error == ENOSYS) {
+        __wasi_fdstat_t fds;
+        error = __wasi_fd_fdstat_get(fildes, &fds);
+      }
+      if (error != 0) {
+        errno = error;
+        return -1;
+      }
+      return 0;
+    }
+#else
     case F_GETFD:
       // Act as if the close-on-exec flag is always set.
       return FD_CLOEXEC;
     case F_SETFD:
       // The close-on-exec flag is ignored.
       return 0;
+#endif
     case F_GETFL: {
 
 #if defined(__wasip1__)

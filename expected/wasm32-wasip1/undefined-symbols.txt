@@ -10,6 +10,7 @@ __browseros_fchmod
 __browseros_flock
 __browseros_fork
 __browseros_fstat
+__browseros_getfd
 __browseros_getitimer
 __browseros_getpgid
 __browseros_getpid
@@ -20,6 +21,7 @@ __browseros_pipe2
 __browseros_posix_spawnp
 __browseros_set_handlers
 __browseros_set_signals
+__browseros_setfd
 __browseros_setitimer
 __browseros_setpgid
 __browseros_sock_bind
