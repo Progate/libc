@@ -154,6 +154,7 @@
 #include <sys/stropts.h>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
+#include <sys/syslog.h>
 #include <sys/termios.h>
 #include <sys/time.h>
 #include <sys/timeb.h>
@@ -166,6 +167,7 @@
 #include <sys/wait.h>
 #include <syscall.h>
 #include <sysexits.h>
+#include <syslog.h>
 #include <tar.h>
 #include <termios.h>
 #include <tgmath.h>

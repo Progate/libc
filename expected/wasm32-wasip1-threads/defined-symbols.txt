@@ -674,6 +674,7 @@ clogf
 clogl
 close
 closedir
+closelog
 confstr
 conj
 conjf
@@ -1225,6 +1226,7 @@ open_wmemstream
 openat
 opendir
 opendirat
+openlog
 optarg
 opterr
 optind
@@ -1470,6 +1472,7 @@ setitimer
 setkey
 setlinebuf
 setlocale
+setlogmask
 setnetent
 setpgid
 setpgrp
@@ -1596,6 +1599,7 @@ swscanf
 symlink
 symlinkat
 sysconf
+syslog
 system
 tan
 tanf
@@ -1682,6 +1686,7 @@ vsprintf
 vsscanf
 vswprintf
 vswscanf
+vsyslog
 vwprintf
 vwscanf
 wait

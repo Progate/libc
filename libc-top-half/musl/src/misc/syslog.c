@@ -15,20 +15,26 @@
 #include "fork_impl.h"
 #include "locale_impl.h"
 
+#ifdef __wasilibc_unmodified_upstream
 static volatile int lock[1];
+#else
+DECLARE_STRONG_LOCK(lock, static);
+#endif
 static char log_ident[32];
 static int log_opt;
 static int log_facility = LOG_USER;
 static int log_mask = 0xff;
 static int log_fd = -1;
+#ifdef __wasilibc_unmodified_upstream
 volatile int *const __syslog_lockptr = lock;
+#endif
 
 int setlogmask(int maskpri)
 {
-	LOCK(lock);
+	STRONG_LOCK(lock);
 	int ret = log_mask;
 	if (maskpri) log_mask = maskpri;
-	UNLOCK(lock);
+	STRONG_UNLOCK(lock);
 	return ret;
 }
 
@@ -46,10 +52,10 @@ void closelog(void)
 	int cs;
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
 #endif
-	LOCK(lock);
+	STRONG_LOCK(lock);
 	close(log_fd);
 	log_fd = -1;
-	UNLOCK(lock);
+	STRONG_UNLOCK(lock);
 #if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 	pthread_setcancelstate(cs, 0);
 #endif
@@ -67,7 +73,7 @@ void openlog(const char *ident, int opt, int facility)
 	int cs;
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
 #endif
-	LOCK(lock);
+	STRONG_LOCK(lock);
 
 	if (ident) {
 		size_t n = strnlen(ident, sizeof log_ident - 1);
@@ -81,7 +87,7 @@ void openlog(const char *ident, int opt, int facility)
 
 	if ((opt & LOG_NDELAY) && log_fd<0) __openlog();
 
-	UNLOCK(lock);
+	STRONG_UNLOCK(lock);
 #if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 	pthread_setcancelstate(cs, 0);
 #endif
@@ -144,9 +150,9 @@ static void __vsyslog(int priority, const char *message, va_list ap)
 #if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
 #endif
-	LOCK(lock);
+	STRONG_LOCK(lock);
 	_vsyslog(priority, message, ap);
-	UNLOCK(lock);
+	STRONG_UNLOCK(lock);
 #if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 	pthread_setcancelstate(cs, 0);
 #endif

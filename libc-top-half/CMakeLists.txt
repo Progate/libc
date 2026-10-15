@@ -178,6 +178,8 @@ if(WASI STREQUAL "p1")
     musl/include/termios.h
     musl/include/sys/wait.h
     musl/include/wait.h
+    musl/include/sys/syslog.h
+    musl/include/syslog.h
   )
 endif()
 
@@ -539,6 +541,9 @@ if (WASI STREQUAL "p1")
     musl/src/passwd/putgrent.c
     musl/src/passwd/putpwent.c
     musl/src/passwd/putspent.c
+    # syslog は /dev/log の UNIX ドメインのソケットへ送る（受ける syslogd が居なければ、Linux と同じく
+    # LOG_CONS なら /dev/console、LOG_PERROR なら標準エラーへ出す）
+    musl/src/misc/syslog.c
   )
 endif()
 
