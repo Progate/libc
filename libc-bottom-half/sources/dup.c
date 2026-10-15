@@ -56,7 +56,12 @@ int __dup3(int fd, int newfd, int flags) {
     errno = EINVAL;
     return -1;
   }
-  return dup2(fd, newfd);
+  if (dup2(fd, newfd) < 0)
+    return -1;
+  // 置いた番号の close-on-exec は dup2 で落ちている。O_CLOEXEC なら立てる（dup3(2)）
+  if (flags & O_CLOEXEC)
+    __browseros_setfd(newfd, FD_CLOEXEC);
+  return newfd;
 #else
   return descriptor_table_dup(fd, DUP_OP_DUP3, newfd);
 #endif

@@ -23,6 +23,12 @@ __BROWSEROS_IMPORT("browser_os_fs", "dup")
 int32_t __browseros_dup(int32_t fd, int32_t lowest, int32_t *newfd);
 __BROWSEROS_IMPORT("browser_os_fs", "dup2")
 int32_t __browseros_dup2(int32_t fd, int32_t newfd);
+// fcntl(2) の F_GETFD / F_SETFD。fd の印（FD_CLOEXEC）は fd 表の持ち主のカーネルが fd の番号ごとに持ち、execve が
+// 通ったときに印の立った fd を閉じる。dup・dup2 で作った番号には立たない。この口を持たないカーネルでは ENOSYS
+__BROWSEROS_IMPORT("browser_os_fs", "getfd")
+int32_t __browseros_getfd(int32_t fd, int32_t *flags);
+__BROWSEROS_IMPORT("browser_os_fs", "setfd")
+int32_t __browseros_setfd(int32_t fd, int32_t flags);
 __BROWSEROS_IMPORT("browser_os_fs", "flock")
 int32_t __browseros_flock(int32_t fd, int32_t operation);
 // fstat / fstatat。WASI の filestat と、filestat に無い st_mode（種類と権限のビット）を 1 度の問い合わせで返す
@@ -57,7 +63,7 @@ int32_t __browseros_tty_get_onlcr(int32_t fd, int32_t *enabled);
 
 // browser_os_process
 
-/// pipe2(2)。flags は O_NONBLOCK だけ
+/// pipe2(2)。flags は O_NONBLOCK と O_CLOEXEC（この libc は O_NONBLOCK だけを渡し、O_CLOEXEC は setfd で立てる）
 __BROWSEROS_IMPORT("browser_os_process", "pipe2")
 int32_t __browseros_pipe2(int32_t *fds, int32_t flags);
 /// posix_spawnp(3) と同じ形。file actions と attr はバイト列で渡す（→ spawn.c）。argv と envp は NUL 区切りのバイト列。
@@ -68,6 +74,7 @@ int32_t __browseros_posix_spawnp(int32_t *pid, const char *file, uint32_t file_l
                                  uint32_t attr_len, const char *argv, uint32_t argv_len,
                                  const char *envp, uint32_t envp_len);
 /// execve(2)。呼んだプロセスの実行ファイルを入れ替える。**通れば戻らない**（カーネルが呼び出しの積み重なりごと捨てる）。
+/// fd 表はそのまま残り、close-on-exec の立った fd だけが閉じる。通らなければ fd は閉じない。
 /// argv と envp は NUL 区切りのバイト列、`cwd` は libc が持っている作業ディレクトリ。`file` に `/` が無ければカーネルは
 /// PATH から探すので、この libc はいつも `/` のあるパスで呼ぶ（→ exec.c）。戻れば errno
 __BROWSEROS_IMPORT("browser_os_process", "execve")
