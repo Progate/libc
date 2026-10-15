@@ -3,12 +3,14 @@ __browseros_chmod_at
 __browseros_credentials
 __browseros_dup
 __browseros_dup2
+__browseros_execve
 __browseros_exit_signal
 __browseros_fchdir
 __browseros_fchmod
 __browseros_flock
 __browseros_fork
 __browseros_fstat
+__browseros_getitimer
 __browseros_getpgid
 __browseros_getpid
 __browseros_getppid
@@ -18,6 +20,7 @@ __browseros_pipe2
 __browseros_posix_spawnp
 __browseros_set_handlers
 __browseros_set_signals
+__browseros_setitimer
 __browseros_setpgid
 __browseros_sock_bind
 __browseros_sock_connect

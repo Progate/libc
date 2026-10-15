@@ -557,7 +557,10 @@ static ssize_t receive_vector(int fd, struct iovec *iov, size_t count, int flags
   } else if (wait_ready(fd, POLLIN, &state.receive_timeout) < 0) {
     return -1;
   }
-  int kernel_flags = flags & (MSG_PEEK | MSG_WAITALL);
+  // カーネルが読むのは WASI の riflags で、Linux の MSG_* とはビットが違う（MSG_PEEK は 2 で、riflags の 2 は
+  // RECV_WAITALL）。そのまま渡すと覗いたつもりの recv が読んだぶんを消費するので、ビットごとに置き換える
+  int kernel_flags = ((flags & MSG_PEEK) ? __WASI_RIFLAGS_RECV_PEEK : 0) |
+                     ((flags & MSG_WAITALL) ? __WASI_RIFLAGS_RECV_WAITALL : 0);
   size_t got = 0;
   __wasi_errno_t error;
   if (state.type == SOCK_DGRAM || from != NULL) {

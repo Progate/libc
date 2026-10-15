@@ -148,8 +148,10 @@ if (WASI STREQUAL "p1")
     sources/browseros/create.c
     sources/browseros/directory.c
     sources/browseros/dl_iterate_phdr.c
+    sources/browseros/exec.c
     sources/browseros/flock.c
     sources/browseros/interfaces.c
+    sources/browseros/itimer.c
     sources/browseros/loadavg.c
     sources/browseros/netdb.c
     sources/browseros/popen.c

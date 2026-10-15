@@ -10,7 +10,7 @@ extern "C" {
 
 int gettimeofday (struct timeval *__restrict, void *__restrict);
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no getitimer */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS: カーネルのインターバルタイマー */
 #define ITIMER_REAL    0
 #define ITIMER_VIRTUAL 1
 #define ITIMER_PROF    2
