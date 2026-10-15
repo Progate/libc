@@ -22,6 +22,10 @@ ssize_t write(int fildes, const void *buf, size_t nbyte) {
 #if defined(__wasip1__)
   __wasi_ciovec_t iov = {.buf = buf, .buf_len = nbyte};
   size_t bytes_written;
+#ifdef __wasilibc_browseros
+  // パイプ・ソケットへ送る前に、MAP_SHARED の写しに書いたものを出す（受けた側が読めるように。→ memory_sync.c）
+  __browseros_memory_sync_fd(fildes);
+#endif
   __wasi_errno_t error =
       __wasi_fd_write(fildes, &iov, 1, &bytes_written);
   if (error != 0) {

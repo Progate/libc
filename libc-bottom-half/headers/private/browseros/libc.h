@@ -37,6 +37,13 @@ void __browseros_socket_copy(int from, int to) __attribute__((__weak__));
 /// 返したものは free する。足りなければ NULL。→ spawn.c
 char *__browseros_pack_strings(char *const strings[], size_t *len);
 
+/// プロセスをまたぐ MAP_SHARED の写しを同期する（POSIX がメモリを同期すると定める関数で呼ぶ）。写しを持たない
+/// プロセスでは何もしない。→ memory_sync.c
+void __browseros_memory_sync(void);
+
+/// fd がパイプ・ソケット・端末（ほかのプロセスと話す口）なら __browseros_memory_sync を呼ぶ。→ memory_sync.c
+void __browseros_memory_sync_fd(int fd);
+
 /// pthread_atfork(3) で登録した処理を走らせる。`phase` は 0 が fork の前（登録の逆順）、1 が親、2 が子（登録の順）。→ atfork.c
 void __browseros_run_atfork(int phase);
 

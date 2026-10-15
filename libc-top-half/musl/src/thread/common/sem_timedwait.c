@@ -1,4 +1,8 @@
 #include <semaphore.h>
+#ifdef __wasilibc_browseros
+// 名前つきセマフォ（sem_open）の値はカーネルにある（→ browseros_sem.h）
+#include "browseros_sem.h"
+#endif
 #include <limits.h>
 #include "pthread_impl.h"
 
@@ -9,6 +13,9 @@ static void cleanup(void *p)
 
 int sem_timedwait(sem_t *restrict sem, const struct timespec *restrict at)
 {
+#ifdef __wasilibc_browseros
+	if (__browseros_sem_is_named(sem)) return __browseros_sem_timedwait(sem, at);
+#endif
 	pthread_testcancel();
 
 	if (!sem_trywait(sem)) return 0;

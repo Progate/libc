@@ -60,7 +60,7 @@ static long cpu_count(void)
 #define JT_MQ_PRIO_MAX JT(3)
 #endif
 #define JT_PAGE_SIZE JT(4)
-#ifdef __wasi_cooperative_threads__ // wasi-threads has no semaphores
+#if defined(__wasi_cooperative_threads__) || defined(__wasilibc_browseros) // wasi-threads has no semaphores
 #define JT_SEM_VALUE_MAX JT(5)
 #endif
 #define JT_NPROCESSORS_CONF JT(6)
@@ -127,7 +127,8 @@ long sysconf(int name)
 		// Not supported on wasi.
 		[_SC_RTSIG_MAX] = -1,
 #endif
-#ifdef __wasi_cooperative_threads__ // wasi-threads has no semaphores
+// wasi-threads has no semaphores. BrowserOS は名前つきセマフォをカーネルの表で持つ（→ semaphore.c）
+#if defined(__wasi_cooperative_threads__) || defined(__wasilibc_browseros)
 		[_SC_SEM_NSEMS_MAX] = SEM_NSEMS_MAX,
 		[_SC_SEM_VALUE_MAX] = JT_SEM_VALUE_MAX,
 #else
@@ -288,7 +289,7 @@ long sysconf(int name)
 #endif
 	case JT_PAGE_SIZE & 255:
 		return PAGE_SIZE;
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasi_cooperative_threads__) // wasi-threads has no semaphores
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasi_cooperative_threads__) || defined(__wasilibc_browseros) // wasi-threads has no semaphores
 	case JT_SEM_VALUE_MAX & 255:
 		return SEM_VALUE_MAX;
 #endif

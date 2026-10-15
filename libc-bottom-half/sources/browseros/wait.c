@@ -6,6 +6,7 @@
 
 #define _GNU_SOURCE
 #include <browseros/host.h>
+#include <browseros/libc.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/resource.h>
@@ -21,6 +22,9 @@ pid_t waitpid(pid_t pid, int *status, int options) {
   }
   if (status && child != 0)
     *status = raw;
+  // 子が終わる前に MAP_SHARED の写しへ書いたものを取り込む（waitpid はメモリを同期する。→ memory_sync.c）
+  if (child != 0)
+    __browseros_memory_sync();
   return child;
 }
 
@@ -52,6 +56,7 @@ int waitid(idtype_t type, id_t id, siginfo_t *info, int options) {
   }
   if (child == 0)
     return 0;
+  __browseros_memory_sync();
   info->si_signo = SIGCHLD;
   info->si_pid = child;
   if (WIFSIGNALED(raw)) {

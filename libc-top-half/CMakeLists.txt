@@ -542,6 +542,16 @@ if (WASI STREQUAL "p1")
   )
 endif()
 
+# 名前つきセマフォ（sem_open・sem_close・sem_unlink）は、値をカーネルの表に置く
+# libc-bottom-half/sources/browseros/semaphore.c が持つ（プロセスは線形メモリを重ねられず、musl の
+# /dev/shm を MAP_SHARED で写す形では同期できない）。shm_open・shm_unlink は musl のもので、カーネルの /dev/shm を開く
+if (WASI STREQUAL "p1")
+  list(REMOVE_ITEM top_half_sources musl/src/thread/common/sem_open.c)
+  list(APPEND top_half_sources musl/src/mman/shm_open.c)
+  # sys/mman.h は _WASI_EMULATED_MMAN を付けたときだけ読める（mmap の写しは libwasi-emulated-mman にある）
+  set_source_files_properties(musl/src/mman/shm_open.c PROPERTIES COMPILE_DEFINITIONS _WASI_EMULATED_MMAN)
+endif()
+
 if (TARGET_TRIPLE MATCHES "wasip1-threads")
   # pthreads functions needed for actual thread support
   list(APPEND top_half_sources

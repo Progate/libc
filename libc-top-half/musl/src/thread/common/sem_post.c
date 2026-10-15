@@ -1,9 +1,16 @@
 #include <semaphore.h>
+#ifdef __wasilibc_browseros
+// 名前つきセマフォ（sem_open）の値はカーネルにある（→ browseros_sem.h）
+#include "browseros_sem.h"
+#endif
 #include <limits.h>
 #include "pthread_impl.h"
 
 int sem_post(sem_t *sem)
 {
+#ifdef __wasilibc_browseros
+	if (__browseros_sem_is_named(sem)) return __browseros_sem_post(sem);
+#endif
 	int val, new, waiters, priv = sem->__val[2];
 	do {
 		val = sem->__val[0];

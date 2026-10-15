@@ -590,25 +590,34 @@ static ssize_t receive_vector(int fd, struct iovec *iov, size_t count, int flags
   return (ssize_t)got;
 }
 
+// ソケットはほかのプロセスと話す口なので、送る前と受けた後に MAP_SHARED の写しを同期する（→ memory_sync.c）
 ssize_t send(int fd, const void *data, size_t length, int flags) {
   struct iovec iov = {.iov_base = (void *)data, .iov_len = length};
+  __browseros_memory_sync();
   return send_vector(fd, &iov, 1, flags, NULL, 0);
 }
 
 ssize_t sendto(int fd, const void *data, size_t length, int flags, const struct sockaddr *to, socklen_t to_length) {
   struct iovec iov = {.iov_base = (void *)data, .iov_len = length};
+  __browseros_memory_sync();
   return send_vector(fd, &iov, 1, flags, to, to_length);
 }
 
 ssize_t recv(int fd, void *data, size_t length, int flags) {
   struct iovec iov = {.iov_base = data, .iov_len = length};
-  return receive_vector(fd, &iov, 1, flags, NULL, NULL);
+  ssize_t got = receive_vector(fd, &iov, 1, flags, NULL, NULL);
+  if (got > 0)
+    __browseros_memory_sync();
+  return got;
 }
 
 ssize_t recvfrom(int fd, void *restrict data, size_t length, int flags, struct sockaddr *restrict from,
                  socklen_t *restrict from_length) {
   struct iovec iov = {.iov_base = data, .iov_len = length};
-  return receive_vector(fd, &iov, 1, flags, from, from_length);
+  ssize_t got = receive_vector(fd, &iov, 1, flags, from, from_length);
+  if (got > 0)
+    __browseros_memory_sync();
+  return got;
 }
 
 // 補助データ（SCM_RIGHTS で fd を渡すなど）はカーネルが運べないので、付いていれば断る
@@ -617,6 +626,7 @@ ssize_t sendmsg(int fd, const struct msghdr *message, int flags) {
     return fail(EFAULT);
   if (message->msg_controllen != 0)
     return fail(EOPNOTSUPP);
+  __browseros_memory_sync();
   return send_vector(fd, message->msg_iov, message->msg_iovlen, flags, message->msg_name, message->msg_namelen);
 }
 
@@ -628,6 +638,8 @@ ssize_t recvmsg(int fd, struct msghdr *message, int flags) {
                                message->msg_name != NULL ? &length : NULL);
   if (got < 0)
     return -1;
+  if (got > 0)
+    __browseros_memory_sync();
   if (message->msg_name != NULL)
     message->msg_namelen = length;
   message->msg_controllen = 0;
