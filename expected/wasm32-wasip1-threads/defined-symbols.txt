@@ -23,6 +23,7 @@ __browseros_handled_count
 __browseros_name_of_address
 __browseros_nocwd_mkdirat
 __browseros_nocwd_openat
+__browseros_pack_strings
 __browseros_report_signals
 __browseros_run_atfork
 __browseros_signal
@@ -748,6 +749,13 @@ erfcl
 erff
 erfl
 errno
+execl
+execle
+execlp
+execv
+execve
+execvp
+execvpe
 exit
 exp
 exp10
@@ -796,6 +804,7 @@ fesetexceptflag
 fesetround
 fetestexcept
 feupdateenv
+fexecve
 fflush
 fflush_unlocked
 ffs

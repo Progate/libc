@@ -67,6 +67,12 @@ int32_t __browseros_posix_spawnp(int32_t *pid, const char *file, uint32_t file_l
                                  const void *actions, uint32_t actions_len, const void *attr,
                                  uint32_t attr_len, const char *argv, uint32_t argv_len,
                                  const char *envp, uint32_t envp_len);
+/// execve(2)。呼んだプロセスの実行ファイルを入れ替える。**通れば戻らない**（カーネルが呼び出しの積み重なりごと捨てる）。
+/// argv と envp は NUL 区切りのバイト列、`cwd` は libc が持っている作業ディレクトリ。`file` に `/` が無ければカーネルは
+/// PATH から探すので、この libc はいつも `/` のあるパスで呼ぶ（→ exec.c）。戻れば errno
+__BROWSEROS_IMPORT("browser_os_process", "execve")
+int32_t __browseros_execve(const char *file, uint32_t file_len, const char *argv, uint32_t argv_len,
+                           const char *envp, uint32_t envp_len, const char *cwd, uint32_t cwd_len);
 __BROWSEROS_IMPORT("browser_os_process", "wait")
 int32_t __browseros_wait(int32_t pid, int32_t options, int32_t *status, int32_t *child);
 __BROWSEROS_IMPORT("browser_os_process", "kill")

@@ -33,6 +33,10 @@ void __browseros_socket_forget(int fd) __attribute__((__weak__));
 /// fd の複製に、ソケットとして覚えていたことを写す。→ socket.c
 void __browseros_socket_copy(int from, int to) __attribute__((__weak__));
 
+/// argv / envp を NUL 区切りのバイト列にする（カーネルの posix_spawnp と execve の渡し方）。`len` に長さを書く。
+/// 返したものは free する。足りなければ NULL。→ spawn.c
+char *__browseros_pack_strings(char *const strings[], size_t *len);
+
 /// pthread_atfork(3) で登録した処理を走らせる。`phase` は 0 が fork の前（登録の逆順）、1 が親、2 が子（登録の順）。→ atfork.c
 void __browseros_run_atfork(int phase);
 

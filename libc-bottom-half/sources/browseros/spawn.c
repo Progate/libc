@@ -1,7 +1,6 @@
 // posix_spawn(3) / posix_spawnp(3) と file actions。
 //
-// BrowserOS には fork も exec も無いので、子を起こすのはカーネルの posix_spawnp（browser_os_process.posix_spawnp）
-// である。file actions と attr はバイト列にして渡し、カーネルが子の fd 表に順に当てる（子の fd は親の fd と同じ
+// 子を起こすのはカーネルの posix_spawnp（browser_os_process.posix_spawnp）である。file actions と attr はバイト列にして渡し、カーネルが子の fd 表に順に当てる（子の fd は親の fd と同じ
 // 開いたファイルの記述を指す）。並べ方は browser-os の process/wasi-spawn.ts と README「本物と同じ形で起こす」にある。
 //
 // libc が持つものはカーネルが知らないので、ここで足す。
@@ -207,8 +206,7 @@ int posix_spawnattr_getschedpolicy(const posix_spawnattr_t *restrict attr, int *
   return 0;
 }
 
-/// NUL 区切りのバイト列にする（argv / env の渡し方。execve の形と同じ）
-static char *pack(char *const strings[], size_t *len) {
+char *__browseros_pack_strings(char *const strings[], size_t *len) {
   size_t total = 0;
   for (size_t i = 0; strings && strings[i]; i++)
     total += strlen(strings[i]) + 1;
@@ -378,8 +376,8 @@ static int spawn(pid_t *restrict pid, const char *restrict file,
     encoded.pgroup = attr->__pgrp;
   }
   size_t argv_len = 0, env_len = 0;
-  char *packed_argv = error ? 0 : pack(argv, &argv_len);
-  char *packed_env = error ? 0 : pack(envp ? envp : environ, &env_len);
+  char *packed_argv = error ? 0 : __browseros_pack_strings(argv, &argv_len);
+  char *packed_env = error ? 0 : __browseros_pack_strings(envp ? envp : environ, &env_len);
   if (!error && (!packed_argv || !packed_env))
     error = ENOMEM;
 

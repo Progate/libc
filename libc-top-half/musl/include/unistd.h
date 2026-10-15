@@ -137,6 +137,8 @@ pid_t fork(void);
 #endif
 #ifdef __wasilibc_unmodified_upstream /* WASI has no fork/exec */
 pid_t _Fork(void);
+#endif
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS: カーネルの execve */
 int execve(const char *, char *const [], char *const []);
 int execv(const char *, char *const []);
 int execle(const char *, const char *, ...);
@@ -267,6 +269,9 @@ int acct(const char *);
 long syscall(long, ...);
 int execvpe(const char *, char *const [], char *const []);
 int issetugid(void);
+#endif
+#ifdef __wasilibc_browseros /* BrowserOS: カーネルの execve */
+int execvpe(const char *, char *const [], char *const []);
 #endif
 int getentropy(void *, size_t);
 extern int optreset;
