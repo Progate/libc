@@ -124,11 +124,11 @@ int fchdir(int);
 int chdir(const char *);
 char *getcwd(char *, size_t);
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no signals */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS: カーネルのインターバルタイマー */
 unsigned alarm(unsigned);
 #endif
 unsigned sleep(unsigned);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no pause */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS: シグナルを待つ */
 int pause(void);
 #endif
 

@@ -1738,6 +1738,9 @@
 #define IQUERY ns_o_iquery
 #define ISIG 0000001
 #define ISTRIP 0000040
+#define ITIMER_PROF 2
+#define ITIMER_REAL 0
+#define ITIMER_VIRTUAL 1
 #define IUCLC 0001000
 #define IUTF8 0040000
 #define IXANY 0004000

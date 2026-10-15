@@ -566,6 +566,7 @@ acosh
 acoshf
 acoshl
 acosl
+alarm
 aligned_alloc
 alphasort
 alphasort64
@@ -941,6 +942,7 @@ gethostent
 gethostid
 gethostname
 getifaddrs
+getitimer
 getline
 getloadavg
 getnameinfo
@@ -1228,6 +1230,7 @@ optind
 optopt
 optreset
 pathconf
+pause
 pclose
 perror
 pipe
@@ -1461,6 +1464,7 @@ setenv
 setgrent
 setgroups
 sethostent
+setitimer
 setkey
 setlinebuf
 setlocale
@@ -1646,6 +1650,7 @@ tss_get
 twalk
 tzname
 tzset
+ualarm
 ulckpwdf
 umask
 uname

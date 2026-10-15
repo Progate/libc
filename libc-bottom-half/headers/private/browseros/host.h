@@ -73,6 +73,13 @@ int32_t __browseros_posix_spawnp(int32_t *pid, const char *file, uint32_t file_l
 __BROWSEROS_IMPORT("browser_os_process", "execve")
 int32_t __browseros_execve(const char *file, uint32_t file_len, const char *argv, uint32_t argv_len,
                            const char *envp, uint32_t envp_len, const char *cwd, uint32_t cwd_len);
+/// setitimer(2)。時間はマイクロ秒。`old` には置き換える前の残りと間隔（u64 の 2 つ）を書く。満了したらカーネルが
+/// SIGALRM を送る。受け付けるのは ITIMER_REAL だけで、ほかは EINVAL（→ itimer.c）
+__BROWSEROS_IMPORT("browser_os_process", "setitimer")
+int32_t __browseros_setitimer(int32_t which, uint64_t value, uint64_t interval, uint64_t *old);
+/// getitimer(2)。いまの残りと間隔（マイクロ秒の u64 の 2 つ）を `current` に書く
+__BROWSEROS_IMPORT("browser_os_process", "getitimer")
+int32_t __browseros_getitimer(int32_t which, uint64_t *current);
 __BROWSEROS_IMPORT("browser_os_process", "wait")
 int32_t __browseros_wait(int32_t pid, int32_t options, int32_t *status, int32_t *child);
 __BROWSEROS_IMPORT("browser_os_process", "kill")
