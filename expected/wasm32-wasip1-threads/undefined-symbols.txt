@@ -105,6 +105,8 @@ __imported_wasi_thread_spawn
 __letf2
 __lttf2
 __netf2
+__stack_high
+__stack_low
 __subtf3
 __trunctfdf2
 __trunctfsf2

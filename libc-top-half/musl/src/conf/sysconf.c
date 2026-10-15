@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
+#include <sys/resource.h>
 #if defined(__wasilibc_browseros) && !defined(__wasilibc_unmodified_upstream)
 #include <fcntl.h>
 
@@ -86,7 +87,8 @@ long sysconf(int name)
 #endif
 		[_SC_CLK_TCK] = 100,
 		[_SC_NGROUPS_MAX] = 32,
-#ifdef __wasilibc_unmodified_upstream // WASI has no rlimit
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
+		// BrowserOS の libc は getrlimit を持つ（→ sources/browseros/rlimit.c）
 		[_SC_OPEN_MAX] = RLIM(NOFILE),
 #else
 		// Rlimit is not supported on wasi.
@@ -264,7 +266,7 @@ long sysconf(int name)
 	} else if (values[name] >= -1) {
 		return values[name];
 	} else if (values[name] < -256) {
-#ifdef __wasilibc_unmodified_upstream // WASI has no getrlimit
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 		struct rlimit lim;
 		getrlimit(values[name]&16383, &lim);
 		if (lim.rlim_cur == RLIM_INFINITY)

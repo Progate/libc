@@ -1,3 +1,5 @@
 __heap_base
 __heap_end
 __c_longjmp
+__stack_low
+__stack_high

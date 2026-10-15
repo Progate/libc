@@ -953,6 +953,7 @@ getpwnam
 getpwnam_r
 getpwuid
 getpwuid_r
+getrlimit
 getrusage
 getservbyname
 getservbyname_r
@@ -1262,6 +1263,7 @@ ppoll
 pread
 preadv
 printf
+prlimit
 program_invocation_name
 program_invocation_short_name
 pselect
@@ -1460,6 +1462,7 @@ setpgid
 setpgrp
 setprotoent
 setpwent
+setrlimit
 setservent
 setsockopt
 setspent
