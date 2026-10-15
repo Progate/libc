@@ -291,6 +291,7 @@ __seed48
 __sem_open_lockptr
 __shgetc
 __shlim
+__shm_mapname
 __signgam
 __sin
 __sindf
@@ -1471,6 +1472,8 @@ setsockopt
 setspent
 setstate
 setvbuf
+shm_open
+shm_unlink
 shutdown
 sigaction
 sigaddset

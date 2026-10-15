@@ -544,6 +544,8 @@ if (WASI STREQUAL "p1")
     # syslog は /dev/log の UNIX ドメインのソケットへ送る（受ける syslogd が居なければ、Linux と同じく
     # LOG_CONS なら /dev/console、LOG_PERROR なら標準エラーへ出す）
     musl/src/misc/syslog.c
+    # shm_open・shm_unlink はカーネルの /dev/shm（共有メモリの tmpfs）のファイルを開く・消す
+    musl/src/mman/shm_open.c
   )
 endif()
 
