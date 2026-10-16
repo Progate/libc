@@ -8,8 +8,8 @@
 #include <stdarg.h>
 
 #ifdef __wasip1__
-#include <browseros/host.h>
 #include <browseros/libc.h>
+#include <browseros/linux.h>
 #endif
 
 #ifndef __wasip1__
@@ -30,56 +30,27 @@ int fcntl(int fildes, int cmd, ...) {
 #if defined(__wasip1__)
     case F_DUPFD:
     case F_DUPFD_CLOEXEC: {
-      // BrowserOS: lowest 以上でいちばん小さい空き番号に複製する（→ browseros/host.h）
+      // BrowserOS: lowest 以上でいちばん小さい空き番号に複製する（カーネルの fcntl(2)。命令は Linux の値）
       va_list ap;
       va_start(ap, cmd);
       int lowest = va_arg(ap, int);
       va_end(ap);
-      int32_t newfd;
-      int32_t error = __browseros_dup(fildes, lowest, &newfd);
-      if (error != 0) {
-        errno = error;
-        return -1;
-      }
+      int newfd = __browseros_syscall_ret(
+          __bos_syscall3(__BOS_SYS_fcntl64, fildes, cmd == F_DUPFD ? __BOS_F_DUPFD : __BOS_F_DUPFD_CLOEXEC, lowest));
       // 複製にもソケットとして覚えていたことを写す（→ browseros/socket.c）
-      if (__browseros_socket_copy)
+      if (newfd >= 0 && __browseros_socket_copy)
         __browseros_socket_copy(fildes, newfd);
-      // 複製した fd に close-on-exec は立たない。F_DUPFD_CLOEXEC だけが立てる（fcntl(2)）
-      if (cmd == F_DUPFD_CLOEXEC)
-        __browseros_setfd(newfd, FD_CLOEXEC);
       return newfd;
     }
-    case F_GETFD: {
-      // BrowserOS: close-on-exec は fd の番号ごとにカーネルが持つ（→ browseros/host.h の getfd）
-      int32_t flags;
-      int32_t error = __browseros_getfd(fildes, &flags);
-      if (error == ENOSYS) {
-        // この口を持たないカーネルは close-on-exec を持たない。開いている fd なら印は無い
-        __wasi_fdstat_t fds;
-        error = __wasi_fd_fdstat_get(fildes, &fds);
-        flags = 0;
-      }
-      if (error != 0) {
-        errno = error;
-        return -1;
-      }
-      return flags;
-    }
+    case F_GETFD:
+      // BrowserOS: close-on-exec は fd の番号ごとにカーネルが持つ
+      return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_fcntl64, fildes, __BOS_F_GETFD, 0));
     case F_SETFD: {
       va_list ap;
       va_start(ap, cmd);
       int flags = va_arg(ap, int);
       va_end(ap);
-      int32_t error = __browseros_setfd(fildes, flags & FD_CLOEXEC);
-      if (error == ENOSYS) {
-        __wasi_fdstat_t fds;
-        error = __wasi_fd_fdstat_get(fildes, &fds);
-      }
-      if (error != 0) {
-        errno = error;
-        return -1;
-      }
-      return 0;
+      return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_fcntl64, fildes, __BOS_F_SETFD, flags & FD_CLOEXEC));
     }
 #else
     case F_GETFD:

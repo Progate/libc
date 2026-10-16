@@ -12,7 +12,7 @@
 #include <wasi/api.h>
 
 #ifdef __wasip1__
-#include <browseros/host.h>
+#include <browseros/linux.h>
 #endif
 
 #ifndef __wasip1__
@@ -26,44 +26,8 @@
 int __wasilibc_nocwd_fstatat(int fd, const char *restrict path, struct stat *restrict buf,
                              int flag) {
 #if defined(__wasip1__)
-  __wasi_lookupflags_t lookup_flags = 0;
-  if ((flag & AT_SYMLINK_NOFOLLOW) == 0)
-      lookup_flags |= __WASI_LOOKUPFLAGS_SYMLINK_FOLLOW;
-
-  __wasi_filestat_t internal_stat;
-  uint32_t mode;
-  // BrowserOS: カーネルの stat_at は末尾のシンボリックリンクを辿る（stat）。lstat（AT_SYMLINK_NOFOLLOW）のときは、
-  // 辿らずに引ける preview1 の path_filestat_get で先にリンクかを見る。リンクを辿った先を答えると、CMake の install
-  // のようにリンクを lstat で見分けるプログラムが、リンクを中身の写しにしてしまう。リンクの権限は Linux と同じく 0777
-  if (flag & AT_SYMLINK_NOFOLLOW) {
-    int32_t error = __wasi_path_filestat_get(fd, 0, path, &internal_stat);
-    if (error == 0 && internal_stat.filetype == __WASI_FILETYPE_SYMBOLIC_LINK) {
-      to_public_stat(&internal_stat, buf);
-      buf->st_mode = S_IFLNK | 0777;
-      buf->st_uid = getuid();
-      buf->st_gid = getgid();
-      return 0;
-    }
-  }
-
-  // BrowserOS: filestat と権限のビットをカーネルに 1 度で聞く（→ fstat.c）
-  int32_t error = __browseros_stat_at(fd, path, strlen(path), &internal_stat, &mode);
-  int has_mode = error == 0;
-  if (error == __WASI_ERRNO_NOTSUP || error == __WASI_ERRNO_NOSYS)
-    error = __wasi_path_filestat_get(fd, lookup_flags, path, &internal_stat);
-  if (error != 0) {
-      errno = error;
-      return -1;
-  }
-  to_public_stat(&internal_stat, buf);
-  if (has_mode) {
-    // 持ち主は自分（→ fstat.c）
-    buf->st_mode = mode;
-    buf->st_uid = getuid();
-    buf->st_gid = getgid();
-  }
-
-  return 0;
+  // BrowserOS: カーネルの statx(2) で引く。AT_SYMLINK_NOFOLLOW なら末尾のシンボリックリンクそのもの（lstat）を答える
+  return __browseros_statx(fd, path, flag & AT_SYMLINK_NOFOLLOW ? __BOS_AT_SYMLINK_NOFOLLOW : 0, buf);
 #elif defined(__wasip2__) || defined(__wasip3__)
   // Translate the file descriptor to an internal handle
   filesystem_borrow_descriptor_t file_handle;

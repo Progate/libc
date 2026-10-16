@@ -152,6 +152,7 @@ if (WASI STREQUAL "p1")
     sources/browseros/flock.c
     sources/browseros/interfaces.c
     sources/browseros/itimer.c
+    sources/browseros/linux.c
     sources/browseros/loadavg.c
     sources/browseros/memory_sync.c
     sources/browseros/netdb.c

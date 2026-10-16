@@ -167,7 +167,7 @@ pid_t getpgrp(void);
 pid_t getpgid(pid_t);
 int setpgid(pid_t, pid_t);
 #endif
-#ifdef __wasilibc_unmodified_upstream /* WASI has no process groups */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS has sessions */
 pid_t setsid(void);
 pid_t getsid(pid_t);
 #endif

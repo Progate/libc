@@ -494,7 +494,7 @@ static descriptor_vtable_t pipe_vtable = {
 #endif // !__wasip1__ && !__wasip2__
 
 #ifdef __wasip1__
-#include <browseros/host.h>
+#include <browseros/linux.h>
 #endif
 
 int pipe(int fd[2]) { return pipe2(fd, 0); }
@@ -505,18 +505,12 @@ int pipe2(int fd[2], int flags) {
     return -1;
   }
 #if defined(__wasip1__)
-  // BrowserOS: パイプはカーネルの開いたファイルの表にある（64KiB・EOF・EPIPE は pipe(7) と同じ）。
-  // O_CLOEXEC は両端に close-on-exec を立てる（pipe2(2)。setfd で立てるので、O_CLOEXEC を受けないカーネルでも作れる）
+  // BrowserOS: パイプはカーネルの開いたファイルの表にある（64KiB・EOF・EPIPE は pipe(7) と同じ）。カーネルの pipe2(2) に
+  // Linux のフラグの値で渡す
   int32_t fds[2];
-  int32_t error = __browseros_pipe2(fds, flags & O_NONBLOCK);
-  if (error != 0) {
-    errno = error;
+  int linux_flags = (flags & O_NONBLOCK ? __BOS_O_NONBLOCK : 0) | (flags & O_CLOEXEC ? __BOS_O_CLOEXEC : 0);
+  if (__browseros_syscall_ret(__bos_syscall2(__BOS_SYS_pipe2, __bos_ptr(fds), linux_flags)) < 0)
     return -1;
-  }
-  if (flags & O_CLOEXEC) {
-    __browseros_setfd(fds[0], FD_CLOEXEC);
-    __browseros_setfd(fds[1], FD_CLOEXEC);
-  }
   fd[0] = fds[0];
   fd[1] = fds[1];
   return 0;

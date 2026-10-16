@@ -5,8 +5,8 @@
 #include <wasi/descriptor_table.h>
 #ifdef __wasip1__
 // BrowserOS: dup は同じ開いたファイルの記述を指す fd を作る（位置・O_NONBLOCK を共有する）。→ browseros/host.h
-#include <browseros/host.h>
 #include <browseros/libc.h>
+#include <browseros/linux.h>
 
 // dup で作った番号へ、ソケットとして覚えていたことを写す（ソケットを使わないプログラムには socket.c が入らない）
 static void copy_socket(int fd, int newfd) {
@@ -17,13 +17,9 @@ static void copy_socket(int fd, int newfd) {
 
 int dup(int fd) {
 #ifdef __wasip1__
-  int32_t newfd;
-  int32_t error = __browseros_dup(fd, 0, &newfd);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  copy_socket(fd, newfd);
+  int newfd = __browseros_syscall_ret(__bos_syscall1(__BOS_SYS_dup, fd));
+  if (newfd >= 0)
+    copy_socket(fd, newfd);
   return newfd;
 #else
   return descriptor_table_dup(fd, DUP_OP_DUP, 0);
@@ -32,13 +28,12 @@ int dup(int fd) {
 
 int dup2(int fd, int newfd) {
 #ifdef __wasip1__
-  int32_t error = __browseros_dup2(fd, newfd);
-  if (error != 0) {
-    errno = error;
+  // dup2(2) は同じ番号なら、開いているかだけを確かめて何もしない。riscv32 の Linux に dup2 は無く、dup3 で書く
+  if (fd == newfd)
+    return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_fcntl64, fd, __BOS_F_GETFD, 0)) < 0 ? -1 : newfd;
+  if (__browseros_syscall_ret(__bos_syscall3(__BOS_SYS_dup3, fd, newfd, 0)) < 0)
     return -1;
-  }
-  if (fd != newfd)
-    copy_socket(fd, newfd);
+  copy_socket(fd, newfd);
   return newfd;
 #else
   return descriptor_table_dup(fd, DUP_OP_DUP2, newfd);
@@ -51,16 +46,10 @@ int __dup3(int fd, int newfd, int flags) {
     return -1;
   }
 #ifdef __wasip1__
-  // dup3 は同じ番号を渡されたら EINVAL（dup2 は何もせず成功する）
-  if (fd == newfd) {
-    errno = EINVAL;
+  // dup3 は同じ番号を渡されたら EINVAL（カーネルが答える）
+  if (__browseros_syscall_ret(__bos_syscall3(__BOS_SYS_dup3, fd, newfd, flags & O_CLOEXEC ? __BOS_O_CLOEXEC : 0)) < 0)
     return -1;
-  }
-  if (dup2(fd, newfd) < 0)
-    return -1;
-  // 置いた番号の close-on-exec は dup2 で落ちている。O_CLOEXEC なら立てる（dup3(2)）
-  if (flags & O_CLOEXEC)
-    __browseros_setfd(newfd, FD_CLOEXEC);
+  copy_socket(fd, newfd);
   return newfd;
 #else
   return descriptor_table_dup(fd, DUP_OP_DUP3, newfd);

@@ -7,8 +7,8 @@
 // O_CREAT で開いたとき、作ったのか既にあったのかは path_open からは分からない。既にあったファイルの権限を
 // 変えてはいけないので、まず O_EXCL を付けて開き、作れたときだけ付け替える。
 
-#include <browseros/host.h>
 #include <browseros/libc.h>
+#include <browseros/linux.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -21,7 +21,7 @@
 
 static int created(int fd, mode_t wanted) {
   if (fd >= 0)
-    __browseros_fchmod(fd, wanted);
+    __bos_syscall2(__BOS_SYS_fchmod, fd, wanted);
   return fd;
 }
 
@@ -52,6 +52,6 @@ int __browseros_nocwd_mkdirat(int dirfd, const char *path, mode_t mode) {
   int result = __wasilibc_nocwd_mkdirat_nomode(dirfd, path);
   mode_t wanted = __browseros_creation_mode(mode);
   if (result == 0 && wanted != KERNEL_DIRECTORY_MODE)
-    __browseros_chmod_at(dirfd, path, strlen(path), wanted);
+    __bos_syscall3(__BOS_SYS_fchmodat, dirfd, __bos_ptr(path), wanted);
   return result;
 }

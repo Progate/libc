@@ -1,75 +1,79 @@
-// waitpid(2) / wait(2) / wait3 / wait4。子が終わるのを待つのはカーネルで、このプロセスはそのあいだ止まる
-// （→ browser-os の src/process/wasi-spawn.ts の wait）。
+// waitpid(2) / wait(2) / wait3 / wait4 / waitid(2)。子が終わるのを待つのはカーネルの waitid（riscv32 の Linux には
+// wait4 が無く、waitid だけがある。musl の emulate_wait4.c と同じく、waitpid を waitid で書く）。
 //
-// `pid` が 0 なら自分のグループの子、-pgid ならそのグループの子を待つ（カーネルが子のグループを見る）。
-// 止まった子・再開した子は居ない（この OS は止める動作のシグナルを捨てる。→ signal.c）ので報告しない。
+// `pid` が 0 なら自分のグループの子、-pgid ならそのグループの子を待つ。止まった子・再開した子は居ない（この OS は
+// 止める動作のシグナルを捨てる。→ signal.c）ので報告しない。
 
 #define _GNU_SOURCE
-#include <browseros/host.h>
 #include <browseros/libc.h>
+#include <browseros/linux.h>
 #include <errno.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <signal.h>
 #include <sys/wait.h>
 
-pid_t waitpid(pid_t pid, int *status, int options) {
-  int32_t raw = 0, child = 0;
-  int32_t error = __browseros_wait(pid, options & WNOHANG, &raw, &child);
-  if (error != 0) {
-    errno = error;
-    return -1;
+/// waitid(2) の idtype と options（Linux の値。この libc のヘッダーと同じ）
+#define BOS_P_ALL 0
+#define BOS_P_PID 1
+#define BOS_P_PGID 2
+
+/// カーネルが書く siginfo_t（riscv32 の Linux の形。`clock_t` が 32 ビットなので、`si_pid` は 12 バイト目から並ぶ。
+/// この libc の siginfo_t は `clock_t` が 64 ビットで、共用体が 8 バイト境界の 16 バイト目から始まる）
+struct linux_siginfo {
+  int32_t signo, error, code;
+  int32_t pid;
+  uint32_t uid;
+  int32_t status;
+  int32_t pad[26];
+};
+
+_Static_assert(sizeof(struct linux_siginfo) == 128, "siginfo_t is 128 bytes");
+
+/// カーネルの waitid。答えをこの libc の siginfo_t に写す
+static long kernel_waitid(int type, int id, siginfo_t *info, int options) {
+  struct linux_siginfo raw = {0};
+  long r = __bos_syscall5(__BOS_SYS_waitid, type, id, __bos_ptr(&raw), options, 0);
+  if (r >= 0 && info) {
+    memset(info, 0, sizeof *info);
+    info->si_signo = raw.signo;
+    info->si_errno = raw.error;
+    info->si_code = raw.code;
+    info->si_pid = raw.pid;
+    info->si_uid = raw.uid;
+    info->si_status = raw.status;
   }
-  if (status && child != 0)
-    *status = raw;
+  return r;
+}
+
+pid_t waitpid(pid_t pid, int *status, int options) {
+  siginfo_t info;
+  int type = pid < -1 ? BOS_P_PGID : pid == -1 ? BOS_P_ALL : pid == 0 ? BOS_P_PGID : BOS_P_PID;
+  int id = pid < -1 ? -pid : pid == -1 ? 0 : pid;
+  memset(&info, 0, sizeof info);
+  long r = kernel_waitid(type, id, &info, WEXITED | (options & WNOHANG));
+  if (r < 0)
+    return __browseros_syscall_ret(r);
+  if (info.si_pid == 0)
+    return 0;
+  if (status)
+    *status = info.si_code == CLD_EXITED ? (info.si_status & 0xff) << 8 : info.si_status & 0x7f;
   // 子が終わる前に MAP_SHARED の写しへ書いたものを取り込む（waitpid はメモリを同期する。→ memory_sync.c）
-  if (child != 0)
-    __browseros_memory_sync();
-  return child;
+  __browseros_memory_sync();
+  return info.si_pid;
 }
 
 pid_t wait(int *status) { return waitpid(-1, status, 0); }
 
-/// カーネルの wait の options に渡す WNOWAIT（報告するが回収しない）
-#define BROWSEROS_WNOWAIT 0x1000000
-
 int waitid(idtype_t type, id_t id, siginfo_t *info, int options) {
-  if (!(options & (WEXITED | WSTOPPED | WCONTINUED)) || (type != P_ALL && type != P_PID && type != P_PGID)) {
-    errno = EINVAL;
-    return -1;
-  }
-  memset(info, 0, sizeof *info);
-  // 止まった子・再開した子は居ないので、それだけを待つなら終わった子を見ない（WNOHANG なら 0 で戻る）
-  if (!(options & WEXITED)) {
-    if (options & WNOHANG)
-      return 0;
-    errno = ECHILD;
-    return -1;
-  }
-  int32_t raw = 0, child = 0;
-  int32_t kernel_options = (options & WNOHANG) | (options & WNOWAIT ? BROWSEROS_WNOWAIT : 0);
-  int32_t target = type == P_PID ? (int32_t)id : type == P_PGID ? (id == 0 ? 0 : -(int32_t)id) : -1;
-  int32_t error = __browseros_wait(target, kernel_options, &raw, &child);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  if (child == 0)
-    return 0;
-  __browseros_memory_sync();
-  info->si_signo = SIGCHLD;
-  info->si_pid = child;
-  if (WIFSIGNALED(raw)) {
-    info->si_code = CLD_KILLED;
-    info->si_status = WTERMSIG(raw);
-  } else {
-    info->si_code = CLD_EXITED;
-    info->si_status = WEXITSTATUS(raw);
-  }
-  return 0;
+  long r = kernel_waitid(type, id, info, options);
+  if (r >= 0 && info->si_pid != 0)
+    __browseros_memory_sync();
+  return __browseros_syscall_ret(r);
 }
 
-/// CPU 時間などの使用量は測れない（ブラウザーは他のスレッドの CPU 時間を教えない）ので 0 で返す
+/// CPU 時間などの使用量は数えていない（カーネルが子の CPU 時間を親へ渡していない）ので 0 で返す
 pid_t wait4(pid_t pid, int *status, int options, struct rusage *usage) {
   pid_t child = waitpid(pid, status, options);
   if (child > 0 && usage)

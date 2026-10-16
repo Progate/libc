@@ -9,23 +9,21 @@
 #define _GNU_SOURCE
 #include <browseros/host.h>
 #include <browseros/libc.h>
+#include <browseros/linux.h>
 #include <errno.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+/// getpid(2)。カーネルが答えない（BrowserOS でないホストの）ときは 1
 pid_t getpid(void) {
-  int32_t pid;
-  if (__browseros_getpid(&pid) != 0)
-    return 1;
-  return pid;
+  long pid = __bos_syscall0(__BOS_SYS_getpid);
+  return pid < 0 ? 1 : pid;
 }
 
 pid_t getppid(void) {
-  int32_t pid;
-  if (__browseros_getppid(&pid) != 0)
-    return 0;
-  return pid;
+  long pid = __bos_syscall0(__BOS_SYS_getppid);
+  return pid < 0 ? 0 : pid;
 }
 
 int kill(pid_t pid, int sig) {
@@ -41,12 +39,7 @@ int kill(pid_t pid, int sig) {
     errno = EPERM;
     return -1;
   }
-  int32_t error = __browseros_kill(pid, sig);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  return 0;
+  return __browseros_syscall_ret(__bos_syscall2(__BOS_SYS_kill, pid, sig));
 }
 
 /// 値は届かない（別のプロセスのハンドラへは配れず、自分へは raise と同じく SI_USER で配る）
@@ -66,25 +59,14 @@ mode_t umask(mode_t mask) {
 /// open(2) / mkdir(2) が新しく作るものに付ける権限（`mode & ~umask`）
 mode_t __browseros_creation_mode(mode_t mode) { return mode & ~current_umask & 07777; }
 
-pid_t getpgid(pid_t pid) {
-  int32_t pgid = 0;
-  int32_t error = __browseros_getpgid(pid, &pgid);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  return pgid;
-}
+pid_t getpgid(pid_t pid) { return __browseros_syscall_ret(__bos_syscall1(__BOS_SYS_getpgid, pid)); }
 
 pid_t getpgrp(void) { return getpgid(0); }
 
-int setpgid(pid_t pid, pid_t pgid) {
-  int32_t error = __browseros_setpgid(pid, pgid);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  return 0;
-}
+int setpgid(pid_t pid, pid_t pgid) { return __browseros_syscall_ret(__bos_syscall2(__BOS_SYS_setpgid, pid, pgid)); }
 
 pid_t setpgrp(void) { return setpgid(0, 0); }
+
+pid_t setsid(void) { return __browseros_syscall_ret(__bos_syscall0(__BOS_SYS_setsid)); }
+
+pid_t getsid(pid_t pid) { return __browseros_syscall_ret(__bos_syscall1(__BOS_SYS_getsid, pid)); }

@@ -15,6 +15,7 @@
 #include <string.h>
 #ifdef __wasip1__
 #include <browseros/host.h>
+#include <browseros/linux.h>
 #include <browseros/libc.h>
 #include <stdarg.h>
 #endif
@@ -334,7 +335,7 @@ int rename(const char *old, const char *new) {
 }
 
 #ifdef __wasip1__
-// BrowserOS: 権限はこの OS の FS が持っている（→ browseros/host.h）。WASI に chmod は無いので、ホスト関数で変える
+// BrowserOS: 権限はこの OS の FS が持っている。WASI に chmod は無いので、カーネルの fchmod(2)・fchmodat(2) で変える
 
 int chmod(const char *path, mode_t mode) {
   char *relative_path;
@@ -346,34 +347,17 @@ int chmod(const char *path, mode_t mode) {
     return -1;
   }
 
-  int32_t error = __browseros_chmod_at(dirfd, relative_path, strlen(relative_path), mode);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  return 0;
+  return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_fchmodat, dirfd, __bos_ptr(relative_path), mode));
 }
 
-int fchmod(int fd, mode_t mode) {
-  int32_t error = __browseros_fchmod(fd, mode);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  return 0;
-}
+int fchmod(int fd, mode_t mode) { return __browseros_syscall_ret(__bos_syscall2(__BOS_SYS_fchmod, fd, mode)); }
 
 int fchmodat(int fd, const char *path, mode_t mode, int flag) {
   // シンボリックリンクを持たない FS なので、AT_SYMLINK_NOFOLLOW でも同じものを変える
   (void)flag;
   if (fd == AT_FDCWD || path[0] == '/')
     return chmod(path, mode);
-  int32_t error = __browseros_chmod_at(fd, path, strlen(path), mode);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  return 0;
+  return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_fchmodat, fd, __bos_ptr(path), mode));
 }
 
 #else
