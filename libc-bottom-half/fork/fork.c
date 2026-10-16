@@ -1,10 +1,10 @@
 // fork(2)。
 //
 // 呼んだプロセスを写して子を作る。親には子の pid、子には 0 が返り、両方がここから続く。写すのはカーネル
-// （browser_os_process.fork。→ browser-os の src/wasi/fork.ts）で、線形メモリ・fd 表・シグナルの扱いを写す。
+// （Linux の syscall の入口の browseros_fork。→ browser-os の src/wasi/fork.ts）で、線形メモリ・fd 表・シグナルの扱いを写す。
 //
 // 関数のフレームとローカル変数は wasm の外から読めないので、プログラムは asyncify（`wasm-opt --asyncify
-// --pass-arg=asyncify-imports@browser_os_process.fork`）で組んでおく。カーネルは asyncify で積み重なりを
+// --pass-arg=asyncify-imports@browser_os_linux.syscall`）で組んでおく。カーネルは asyncify で積み重なりを
 // `asyncify_data` へ書き出して `_start` まで巻き戻し、線形メモリを写してから、親と子の両方をここへ巻き直す。
 // asyncify で組んでいなければ ENOSYS が返る。
 //

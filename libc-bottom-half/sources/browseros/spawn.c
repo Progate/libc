@@ -11,8 +11,8 @@
 // - PATH: posix_spawnp は呼んだプロセスのいまの PATH を引いて、`/` のあるパスで 1 つずつ試す（musl・execvp(3) と同じ）
 // - umask: addopen が作るファイルの権限は `mode & ~umask` にして渡す
 //
-// 子へ継がせられるのは fd 0 / 1 / 2 だけである（WASI の fd 3 からは preopen が並ぶ）。3 以上の fd を開いたまま子に
-// 残す file actions は、カーネルが ENOTSUP で断る。
+// 3 以上の fd を開いたまま子に残す file actions のうち、カーネルが表せないものは ENOTSUP で断られる
+// （→ browser-os の process/wasi-spawn.ts）。
 
 #define _GNU_SOURCE
 #include <browseros/host.h>
