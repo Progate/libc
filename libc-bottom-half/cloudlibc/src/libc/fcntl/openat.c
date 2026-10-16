@@ -33,6 +33,11 @@ static_assert(O_TRUNC >> 12 == __WASI_OFLAGS_TRUNC, "Value mismatch");
 #endif
 
 int __wasilibc_nocwd_openat_nomode(int fd, const char *path, int oflag) {
+  // browseros: アクセスモードのビットが 1 つも無い（0）なら読み取りとして開く。Linux / macOS では
+  // O_RDONLY が 0 なので、0 を渡すプログラムは読み取りのつもりで渡している（Go の js/wasm が Node の
+  // fs.open へ渡す flags がそれで、esbuild-wasm がディレクトリを読めなかった）。WASI の O_RDONLY は 0 ではない
+  if ((oflag & O_ACCMODE) == 0)
+    oflag |= O_RDONLY;
 #if defined(__wasip1__)
   // Compute rights corresponding with the access modes provided.
   // Attempt to obtain all rights, except the ones that contradict the
