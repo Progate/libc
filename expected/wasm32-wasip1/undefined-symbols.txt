@@ -7,17 +7,6 @@ __browseros_ksem_timedwait
 __browseros_ksem_trywait
 __browseros_ksem_unlink
 __browseros_linux_syscall
-__browseros_setfd
-__browseros_sock_bind
-__browseros_sock_connect
-__browseros_sock_getlocaladdr
-__browseros_sock_getpeeraddr
-__browseros_sock_getsockopt
-__browseros_sock_listen
-__browseros_sock_open
-__browseros_sock_recv_from
-__browseros_sock_send_to
-__browseros_sock_setsockopt
 __data_end
 __divtf3
 __eqtf2

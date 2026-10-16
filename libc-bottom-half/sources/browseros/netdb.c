@@ -8,8 +8,8 @@
 //   2. `localhost` と `*.localhost` はループバック（RFC 6761。musl と同じ）
 //   3. /etc/hosts に載る名前は、そこに書かれた番地（Linux の files と同じ。カーネルも同じ名簿で繋ぐ）
 //   4. それ以外の名前は、予約済みで経路の無い 240.0.0.0/4 から番地を 1 つ割り当て、その名前の代わりにする。
-//      connect はその番地を名前に戻し、カーネルに名前のまま繋がせる（→ socket.c）。割り当てはプロセスの中で
-//      名前ごとに決まり、getnameinfo と gethostbyaddr はその番地から名前を引き戻す
+//      割り当てはカーネルが持ち（browseros_resolve）、その番地への connect はカーネルが名前に戻して名前のまま繋ぐ。
+//      getnameinfo と gethostbyaddr はその番地から名前を引き戻す（browseros_hostname）
 //
 // サービスの名前（`http` など）は /etc/services で引く（musl の getservbyname_r）。BrowserOS の世界は /etc/services を
 // 持たないことがあるので、そのときは IANA の割り当てのうち広く使うものをこの中の表で引く。
@@ -17,6 +17,7 @@
 #define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <browseros/libc.h>
+#include <browseros/linux.h>
 #include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
@@ -32,32 +33,17 @@
 // 名前に割り当てる番地の範囲（240.0.0.0/4。将来のために予約されていて、どこへも経路が無い）
 #define NAMED_BASE 0xf0000000u
 #define NAMED_MASK 0xf0000000u
-#define MAX_NAMES 4096
 
-static char *names[MAX_NAMES];
-static size_t name_count;
-static pthread_mutex_t names_lock = PTHREAD_MUTEX_INITIALIZER;
+// この OS が足した syscall（→ browser-os の src/wasi/linux/sockets.ts）。名前と番地の割り当てはカーネルが持つ
+#define SYS_browseros_resolve 1027
+#define SYS_browseros_hostname 1028
 
-// 名前の代わりの番地（ホストのバイト順）。初めての名前には新しく割り当てる。割り当てられなければ 0
+// 名前の代わりの番地（ホストのバイト順）。初めての名前にはカーネルが新しく割り当てる。割り当てられなければ 0
 static uint32_t address_for_name(const char *name) {
-  uint32_t address = 0;
-  pthread_mutex_lock(&names_lock);
-  for (size_t i = 0; i < name_count; i++) {
-    if (strcasecmp(names[i], name) == 0) {
-      address = NAMED_BASE + (uint32_t)i + 1;
-      break;
-    }
-  }
-  if (address == 0 && name_count < MAX_NAMES) {
-    char *copy = strdup(name);
-    if (copy != NULL) {
-      names[name_count] = copy;
-      address = NAMED_BASE + (uint32_t)name_count + 1;
-      name_count++;
-    }
-  }
-  pthread_mutex_unlock(&names_lock);
-  return address;
+  uint32_t network = 0;
+  if (__bos_syscall2(SYS_browseros_resolve, __bos_ptr(name), __bos_ptr(&network)) < 0)
+    return 0;
+  return ntohl(network);
 }
 
 // 番地が名前の代わりなら、その名前を host に写して 1。名前の代わりでなければ 0。範囲の中なのに割り当てていない
@@ -65,18 +51,15 @@ static uint32_t address_for_name(const char *name) {
 int __browseros_name_of_address(uint32_t address, char *host, size_t size) {
   if ((address & NAMED_MASK) != NAMED_BASE)
     return 0;
-  int found = -1;
-  pthread_mutex_lock(&names_lock);
-  size_t index = address - NAMED_BASE - 1;
-  if (address != NAMED_BASE && index < name_count) {
-    if (size > 0) {
-      strncpy(host, names[index], size - 1);
-      host[size - 1] = '\0';
-    }
-    found = 1;
+  char name[256];
+  long length = __bos_syscall3(SYS_browseros_hostname, address, __bos_ptr(name), sizeof name);
+  if (length < 0)
+    return -1;
+  if (size > 0) {
+    strncpy(host, name, size - 1);
+    host[size - 1] = '\0';
   }
-  pthread_mutex_unlock(&names_lock);
-  return found;
+  return 1;
 }
 
 // /etc/services が無い世界で引く、よく使うサービスの割り当て（IANA）

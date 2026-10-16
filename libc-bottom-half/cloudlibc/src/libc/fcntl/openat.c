@@ -19,6 +19,7 @@
 
 #ifdef __wasip1__
 #include <browseros/host.h>
+#include <browseros/linux.h>
 
 static_assert(O_APPEND == __WASI_FDFLAGS_APPEND, "Value mismatch");
 static_assert(O_DSYNC == __WASI_FDFLAGS_DSYNC, "Value mismatch");
@@ -96,7 +97,7 @@ int __wasilibc_nocwd_openat_nomode(int fd, const char *path, int oflag) {
   }
   // BrowserOS: O_CLOEXEC は path_open に無いので、開いた fd に close-on-exec を立てる（open(2)。→ browseros/host.h）
   if (oflag & O_CLOEXEC)
-    __browseros_setfd(newfd, FD_CLOEXEC);
+    __bos_syscall3(__BOS_SYS_fcntl64, newfd, __BOS_F_SETFD, 1);
   return newfd;
 #elif defined(__wasip2__) || defined(__wasip3__)
   // Set up path flags

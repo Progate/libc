@@ -150,9 +150,8 @@ if (WASI STREQUAL "p1")
     sources/truncate.c
     cloudlibc/src/libc/unistd/unlinkat.c
   )
-  # ソケットはカーネルのソケット表を使う browseros/socket.c が持つ（accept・recv・send・getsockopt を含む）
+  # ソケットはカーネルの socket(2) などを呼ぶ browseros/socket.c が持つ（accept・recv・send・getsockopt・shutdown を含む）
   list(APPEND bottom_half_sources
-    cloudlibc/src/libc/sys/socket/shutdown.c
     sources/browseros/atfork.c
     sources/browseros/clocks.c
     sources/browseros/dl_iterate_phdr.c
