@@ -48,6 +48,12 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_pipe2 59
 #define __BOS_SYS_waitid 95
 #define __BOS_SYS_kill 129
+#define __BOS_SYS_tkill 130
+#define __BOS_SYS_rt_sigsuspend 133
+#define __BOS_SYS_rt_sigaction 134
+#define __BOS_SYS_rt_sigprocmask 135
+#define __BOS_SYS_rt_sigpending 136
+#define __BOS_SYS_rt_sigreturn 139
 #define __BOS_SYS_setpgid 154
 #define __BOS_SYS_getpgid 155
 #define __BOS_SYS_getsid 156
@@ -60,7 +66,14 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_geteuid 175
 #define __BOS_SYS_getgid 176
 #define __BOS_SYS_getegid 177
+#define __BOS_SYS_gettid 178
+#define __BOS_SYS_umask 166
 #define __BOS_SYS_statx 291
+#define __BOS_SYS_rt_sigtimedwait_time64 421
+
+// この OS が足した syscall（Linux が使わない 1024 から。→ browser-os の src/wasi/linux/）
+/// 配るシグナルを 1 つ受け取る（Linux ではカーネルがハンドラのフレームを積むところ。→ signal.c）
+#define __BOS_SYS_browseros_sigdeliver 1024
 
 // 値が Linux とこの libc で違う定数の、Linux の値
 #define __BOS_O_NONBLOCK 04000

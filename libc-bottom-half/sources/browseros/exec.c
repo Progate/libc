@@ -10,7 +10,7 @@
 // libc が持ち、カーネルが知らないものはここで渡す（posix_spawn と同じ。→ spawn.c）。
 //
 // - 作業ディレクトリ: cwd の持ち主は libc なので、getcwd() を渡す（相対パスの実行ファイルはそこから引かれる）
-// - シグナル: 無視しているものと塞いでいるものを、呼ぶ前に __browseros_report_signals で知らせる
+// - シグナル: 無視しているものと塞いでいるものはカーネルが持っていて、新しいプログラムへ残す
 // - PATH: execvp・execvpe・execlp は呼んだプロセスの PATH を引いて、`/` のあるパスで 1 つずつ試す（musl と同じ）
 //
 // カーネルの execve は `/` の無い名前を PATH から探すので、execve(2) に `/` の無い名前が来たら `./` を付けて、
@@ -67,7 +67,6 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
   }
   int error = ENOMEM;
   if (packed_argv && packed_env && (!bare || relative)) {
-    __browseros_report_signals();
     // 入れ替わると写しは消えるので、MAP_SHARED の写しに書いたものを先にファイルへ出す（→ memory_sync.c）
     __browseros_memory_sync();
     error = __browseros_execve(file, strlen(file), packed_argv, argv_len, packed_env, env_len, cwd,

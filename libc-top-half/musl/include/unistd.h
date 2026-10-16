@@ -291,6 +291,9 @@ char *get_current_dir_name(void);
 #ifdef __wasilibc_unmodified_upstream /* WASI has no syncfs */
 int syncfs(int);
 #endif
+#ifdef __wasilibc_browseros /* BrowserOS has threads with their own ids */
+pid_t gettid(void);
+#endif
 #ifdef __wasilibc_unmodified_upstream /* WASI has no eaccess */
 int euidaccess(const char *, int);
 int eaccess(const char *, int);

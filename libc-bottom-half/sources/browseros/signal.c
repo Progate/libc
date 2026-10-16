@@ -1,43 +1,61 @@
-// シグナルの動作（sigaction）・マスク（sigprocmask）・保留と、raise(3)。
+// シグナルの動作（sigaction）・マスク（sigprocmask）・保留・待ち（sigsuspend・sigtimedwait）と、raise(3)。
 //
-// 動作の表はプロセスに 1 つ、マスクと保留はスレッドごとに持つ（POSIX と同じ。raise は呼んだスレッドへ届く）。
-// ハンドラの無いシグナルの既定の動作は Linux と同じで、終わるもの（SIGPIPE・SIGTERM・SIGABRT など）は
-// カーネルの exit_signal で終わる。親の waitpid からは kill(2) で止められたのと同じく WIFSIGNALED に見える。
+// シグナルの状態はカーネルが持つ（Linux と同じ。→ browser-os の src/wasi/linux/signals.ts）。動作の表はプロセスに
+// 1 つ、マスクはスレッドごとで、どれも rt_sigaction(2)・rt_sigprocmask(2) などで読み書きする。libc は写しを持たない。
 //
-// 止める動作（SIGSTOP・SIGTSTP・SIGTTIN・SIGTTOU）は捨てる。この OS にジョブ制御は無く、どのプロセスも
-// 制御端末を持つセッションに属さないので、POSIX が「孤立したプロセスグループでは捨てる」と定める場合に当たる。
+// 配るところだけは libc が受け持つ。Linux のカーネルは syscall から戻るところでハンドラのフレームを積んで飛ばすが、
+// wasm の積み重なりはカーネルから触れない。そこで、syscall から戻るところでランタイムが受け口 __browseros_signal
+// を呼び（→ browser-wasi の signals.ts）、受け口はカーネルの browseros_sigdeliver で配るものとマスクを受け取って
+// ハンドラを呼び、rt_sigreturn(2) でマスクを戻す。既定の動作（終わる・止まる）と無視はカーネルが済ませる。
 //
-// 始めるときの扱いはカーネルが決めている（posix_spawn の子は、親が無視していたものを無視し、塞いでいたものを
-// 塞いだまま始まる）。起動時に読んで、動作の表とマスクの初期値にする。親の扱いは、posix_spawn の前に
-// __browseros_report_signals でカーネルへ知らせる（本物ではカーネルがもともと持っているもの）。
-//
-// 届くのは、このプロセスの中で起きたシグナル（raise・abort・kill(getpid())・読む端の無いパイプへの write の
-// SIGPIPE）と、カーネルが送るシグナル（子が終わったときの SIGCHLD・他のプロセスからの kill(2)・端末の Ctrl+C）である。
-// カーネルが送るものは、ハンドラを置いているときだけ保留に積まれる（置いていなければカーネルが既定の動作にする）。
-// ハンドラを置いたら __browseros_set_handlers で知らせる。カーネルは止まっている syscall を EINTR で起こし、
-// syscall から戻るところでランタイムが __browseros_signal を呼ぶ（Unix のカーネルがユーザー空間へ戻るところで
-// ハンドラを走らせるのと同じ。→ browser-wasi の signals.ts）。
+// 関数ポインタは wasm では関数の表の番号である。表の 1 番は普通の関数でありうるので、Linux の SIG_IGN（1）と
+// 重ならないよう、カーネルへはハンドラの番号に最上位のビットを立てて渡す（0 が SIG_DFL、1 が SIG_IGN）。
 
 #define _GNU_SOURCE
-#include <browseros/host.h>
 #include <browseros/libc.h>
+#include <browseros/linux.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <wasi/api.h>
 
-/// 各シグナルの動作。0 で埋まった `sa_handler`（SIG_DFL）が初期状態
-static struct sigaction actions[_NSIG];
+/// カーネルの struct sigaction（riscv32 の Linux。SA_RESTORER は無い）
+struct kernel_sigaction {
+  uint32_t handler;
+  uint32_t flags;
+  uint64_t mask;
+};
 
-/// このスレッドが塞いでいるシグナル
-static _Thread_local sigset_t blocked;
+/// browseros_sigdeliver が書くフレーム（→ browser-os の src/wasi/linux/signals.ts）
+struct signal_frame {
+  int32_t sig;
+  uint32_t handler;
+  int32_t flags;
+  int32_t code;
+  int32_t pid;
+  uint32_t uid;
+  uint64_t oldmask;
+};
 
-/// 塞がれているあいだに届き、まだ配っていないシグナル
-static _Thread_local sigset_t pending;
+/// カーネルの siginfo_t（riscv32 の Linux。→ wait.c）
+struct kernel_siginfo {
+  int32_t signo, error, code;
+  int32_t pid;
+  uint32_t uid;
+  int32_t pad[27];
+};
+
+/// カーネルの struct timespec（64 ビット）
+struct kernel_timespec {
+  int64_t tv_sec;
+  int64_t tv_nsec;
+};
+
+#define KERNEL_SIG_DFL 0u
+#define KERNEL_SIG_IGN 1u
+#define KERNEL_HANDLER_BIT 0x80000000u
 
 /// このスレッドでハンドラを走らせた回数（→ __browseros_handled_count）
 static _Thread_local unsigned handled_count;
@@ -46,160 +64,83 @@ unsigned __browseros_handled_count(void) { return handled_count; }
 
 void __SIG_IGN(int sig) { (void)sig; }
 
-/// u64（シグナル n はビット n-1）と sigset_t の先頭を行き来する。sigset_t の並びは musl と同じ（→ sigaddset.c）
-static uint64_t mask_of(const sigset_t *set) {
-  uint64_t mask = 0;
-  for (int sig = 1; sig < _NSIG; sig++)
-    if (sigismember(set, sig))
-      mask |= (uint64_t)1 << (sig - 1);
-  return mask;
-}
-
-static void set_of(uint64_t mask, sigset_t *set) {
-  sigemptyset(set);
-  for (int sig = 1; sig < _NSIG; sig++)
-    if (mask & ((uint64_t)1 << (sig - 1)))
-      sigaddset(set, sig);
-}
-
-// main より前（stdio が書き始めるより前）に読む。読めないホストでは既定の動作で、塞がずに始める
-static void report_handlers(void);
-
-__attribute__((constructor(10))) static void adopt_initial_signals(void) {
-  uint64_t ignored = 0, mask = 0;
-  if (__browseros_initial_signals(&ignored, &mask) != 0)
-    return;
-  for (int sig = 1; sig < _NSIG; sig++)
-    if (ignored & ((uint64_t)1 << (sig - 1)))
-      actions[sig].sa_handler = SIG_IGN;
-  set_of(mask, &blocked);
-  report_handlers();
-}
-
-/// 送られたときに保留へ積んでほしいシグナルをカーネルへ知らせる。ハンドラを置いたものと、塞いでいるもの
-/// （塞いでいるあいだは保留に残り、外したときに配られる。sigwait で待つのもこれ）。それ以外はカーネルが既定の動作にする
-static void report_handlers(void) {
-  uint64_t caught = mask_of(&blocked);
-  for (int sig = 1; sig < _NSIG; sig++)
-    if (actions[sig].sa_handler != SIG_DFL && actions[sig].sa_handler != SIG_IGN)
-      caught |= (uint64_t)1 << (sig - 1);
-  __browseros_set_handlers(caught);
-}
-
-void __browseros_report_signals(void) {
-  // 捕まえているシグナルは子では既定に戻る（ハンドラは子に無い）。無視しているものだけを知らせる
-  sigset_t ignored;
-  sigemptyset(&ignored);
-  for (int sig = 1; sig < _NSIG; sig++)
-    if (actions[sig].sa_handler == SIG_IGN)
-      sigaddset(&ignored, sig);
-  __browseros_set_signals(mask_of(&ignored), mask_of(&blocked));
-}
-
 _Noreturn void __SIG_ERR(int sig) {
   (void)sig;
   __builtin_trap();
 }
 
+/// sigset_t の先頭 8 バイト（シグナル n はビット n-1。musl の sigset_t と同じ並び）
+static uint64_t mask_of(const sigset_t *set) {
+  uint64_t mask;
+  memcpy(&mask, set, sizeof mask);
+  return mask;
+}
+
+static void set_of(uint64_t mask, sigset_t *set) {
+  memset(set, 0, sizeof *set);
+  memcpy(set, &mask, sizeof mask);
+}
+
+static uint32_t encode_handler(void (*handler)(int)) {
+  if (handler == SIG_DFL)
+    return KERNEL_SIG_DFL;
+  if (handler == SIG_IGN)
+    return KERNEL_SIG_IGN;
+  return (uint32_t)(uintptr_t)handler | KERNEL_HANDLER_BIT;
+}
+
+static void (*decode_handler(uint32_t handler))(int) {
+  if (handler == KERNEL_SIG_DFL)
+    return SIG_DFL;
+  if (handler == KERNEL_SIG_IGN)
+    return SIG_IGN;
+  return (void (*)(int))(uintptr_t)(handler & ~KERNEL_HANDLER_BIT);
+}
+
+/// syscall から戻るところでランタイムが呼ぶ受け口。`hint` は共有の語から取り出したシグナル（0 なら無し）。
+/// 戻り値は、EINTR で終わった syscall をやり直してよいか（走らせたハンドラがすべて SA_RESTART を持っていたか）
+__attribute__((export_name("__browseros_signal"))) int __browseros_signal(int hint) {
+  int saved = errno;
+  int restart = 1;
+  struct signal_frame frame;
+  while (__bos_syscall2(__BOS_SYS_browseros_sigdeliver, hint, __bos_ptr(&frame)) > 0) {
+    hint = 0;
+    handled_count++;
+    if (frame.flags & SA_SIGINFO) {
+      siginfo_t info;
+      memset(&info, 0, sizeof info);
+      info.si_signo = frame.sig;
+      info.si_code = frame.code;
+      info.si_pid = frame.pid;
+      info.si_uid = frame.uid;
+      ((void (*)(int, siginfo_t *, void *))(uintptr_t)(frame.handler & ~KERNEL_HANDLER_BIT))(frame.sig, &info, 0);
+    } else {
+      decode_handler(frame.handler)(frame.sig);
+    }
+    if (!(frame.flags & SA_RESTART))
+      restart = 0;
+    __bos_syscall1(__BOS_SYS_rt_sigreturn, __bos_ptr(&frame));
+  }
+  errno = saved;
+  return restart;
+}
+
 /// 変えられない（SIGKILL・SIGSTOP）か、musl が内部用に取っておく番号（32〜34）か
 static int reserved(int sig) { return sig == SIGKILL || sig == SIGSTOP || (unsigned)sig - 32U < 3; }
 
-static int valid(int sig) { return sig > 0 && sig < _NSIG; }
-
-/// 既定の動作が「無視」か「止める」（この OS では捨てる）か
-static int discarded_by_default(int sig) {
-  switch (sig) {
-  case SIGCHLD:
-  case SIGURG:
-  case SIGWINCH:
-  case SIGCONT:
-  case SIGSTOP:
-  case SIGTSTP:
-  case SIGTTIN:
-  case SIGTTOU:
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-/// 既定の動作で終わる。カーネルの外（exit_signal を渡さないホスト）では、シェルと同じ `128 + 番号` で終わる
-_Noreturn static void terminate(int sig) {
-  __browseros_exit_signal(sig);
-  _Exit(128 + sig);
-}
-
-static void deliver_pending(void);
-
-/// 1 つ配る。塞がれていれば保留に積む
-static void deliver(int sig) {
-  if (sigismember(&blocked, sig)) {
-    sigaddset(&pending, sig);
-    return;
-  }
-  struct sigaction action = actions[sig];
-  if (action.sa_handler == SIG_IGN)
-    return;
-  if (action.sa_handler == SIG_DFL) {
-    if (discarded_by_default(sig))
-      return;
-    terminate(sig);
-  }
-  // ハンドラのあいだは sa_mask と（SA_NODEFER でなければ）そのシグナル自身を塞ぎ、戻ったら元のマスクに戻す
-  sigset_t saved = blocked;
-  sigorset(&blocked, &blocked, &action.sa_mask);
-  if (!(action.sa_flags & SA_NODEFER))
-    sigaddset(&blocked, sig);
-  if (action.sa_flags & SA_RESETHAND) {
-    actions[sig].sa_handler = SIG_DFL;
-    actions[sig].sa_flags &= ~SA_SIGINFO;
-  }
-  handled_count++;
-  if (action.sa_flags & SA_SIGINFO) {
-    siginfo_t info;
-    memset(&info, 0, sizeof info);
-    info.si_signo = sig;
-    info.si_code = SI_USER;
-    info.si_pid = getpid();
-    action.sa_sigaction(sig, &info, 0);
-  } else {
-    action.sa_handler(sig);
-  }
-  blocked = saved;
-  deliver_pending();
-}
-
-/// 塞ぐのをやめたシグナルのうち、保留にあるものを番号の小さい順に配る
-static void deliver_pending(void) {
-  for (int sig = 1; sig < _NSIG; sig++) {
-    if (sigismember(&pending, sig) && !sigismember(&blocked, sig)) {
-      sigdelset(&pending, sig);
-      deliver(sig);
-    }
-  }
-}
-
-/// カーネルが送ったシグナルを、syscall から戻るところで配る口（ランタイムが呼ぶ。→ browser-wasi の signals.ts）。
-/// 塞いでいればこのスレッドの保留に入る。戻り値は、その syscall を EINTR で終える代わりにやり直してよいか
-/// （ハンドラが SA_RESTART を持つか。ハンドラの無いシグナルは何も中断していないのでやり直してよい）
-__attribute__((export_name("__browseros_signal"))) int __browseros_signal(int sig) {
-  if (!valid(sig))
-    return 1;
-  int saved = errno;
-  struct sigaction action = actions[sig];
-  deliver(sig);
-  errno = saved;
-  int caught = action.sa_handler != SIG_DFL && action.sa_handler != SIG_IGN;
-  return !caught || (action.sa_flags & SA_RESTART) != 0;
-}
-
 int raise(int sig) {
-  if (!valid(sig)) {
-    errno = EINVAL;
-    return -1;
-  }
-  deliver(sig);
-  return 0;
+  // musl と同じく、送るあいだはアプリのシグナルを塞ぎ、戻してから配らせる（tkill(2) は自分のスレッドへ送る）
+  sigset_t all, saved;
+  sigfillset(&all);
+  pthread_sigmask(SIG_BLOCK, &all, &saved);
+  long r = __bos_syscall2(__BOS_SYS_tkill, gettid(), sig);
+  pthread_sigmask(SIG_SETMASK, &saved, 0);
+  return __browseros_syscall_ret(r);
+}
+
+pid_t gettid(void) {
+  long tid = __bos_syscall0(__BOS_SYS_gettid);
+  return tid < 0 ? getpid() : tid;
 }
 
 void __browseros_broken_pipe(void) {
@@ -209,18 +150,28 @@ void __browseros_broken_pipe(void) {
 }
 
 int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict old) {
-  if (!valid(sig) || (act && reserved(sig))) {
+  if (sig < 1 || sig >= _NSIG || (act && reserved(sig))) {
     errno = EINVAL;
     return -1;
   }
-  if (old)
-    *old = actions[sig];
+  struct kernel_sigaction next, previous;
   if (act) {
-    actions[sig] = *act;
-    // 無視にしたシグナルの保留は捨てる（POSIX: 保留中のシグナルを SIG_IGN にすると捨てられる）
-    if (act->sa_handler == SIG_IGN || (act->sa_handler == SIG_DFL && discarded_by_default(sig)))
-      sigdelset(&pending, sig);
-    report_handlers();
+    next.handler = act->sa_flags & SA_SIGINFO ? (uint32_t)(uintptr_t)act->sa_sigaction | KERNEL_HANDLER_BIT
+                                              : encode_handler(act->sa_handler);
+    next.flags = act->sa_flags;
+    next.mask = mask_of(&act->sa_mask);
+  }
+  long r = __bos_syscall4(__BOS_SYS_rt_sigaction, sig, act ? __bos_ptr(&next) : 0, old ? __bos_ptr(&previous) : 0, 8);
+  if (r < 0)
+    return __browseros_syscall_ret(r);
+  if (old) {
+    memset(old, 0, sizeof *old);
+    if (previous.flags & SA_SIGINFO)
+      old->sa_sigaction = (void (*)(int, siginfo_t *, void *))(uintptr_t)(previous.handler & ~KERNEL_HANDLER_BIT);
+    else
+      old->sa_handler = decode_handler(previous.handler);
+    old->sa_flags = previous.flags;
+    set_of(previous.mask, &old->sa_mask);
   }
   return 0;
 }
@@ -236,33 +187,14 @@ extern __typeof(signal) bsd_signal __attribute__((__weak__, __alias__("signal"))
 extern __typeof(signal) __sysv_signal __attribute__((__weak__, __alias__("signal")));
 
 int pthread_sigmask(int how, const sigset_t *restrict set, sigset_t *restrict old) {
-  if (old)
-    *old = blocked;
-  if (!set)
-    return 0;
-  sigset_t next;
-  switch (how) {
-  case SIG_BLOCK:
-    sigorset(&next, &blocked, set);
-    break;
-  case SIG_UNBLOCK:
-    next = blocked;
-    for (int sig = 1; sig < _NSIG; sig++)
-      if (sigismember(set, sig))
-        sigdelset(&next, sig);
-    break;
-  case SIG_SETMASK:
-    next = *set;
-    break;
-  default:
+  uint64_t next = set ? mask_of(set) : 0, previous = 0;
+  if (set && how != SIG_BLOCK && how != SIG_UNBLOCK && how != SIG_SETMASK)
     return EINVAL;
-  }
-  // SIGKILL と SIGSTOP は塞げない（黙って外す。Linux と同じ）
-  sigdelset(&next, SIGKILL);
-  sigdelset(&next, SIGSTOP);
-  blocked = next;
-  report_handlers();
-  deliver_pending();
+  long r = __bos_syscall4(__BOS_SYS_rt_sigprocmask, how, set ? __bos_ptr(&next) : 0, old ? __bos_ptr(&previous) : 0, 8);
+  if (r < 0)
+    return -r;
+  if (old)
+    set_of(previous, old);
   return 0;
 }
 
@@ -276,109 +208,42 @@ int sigprocmask(int how, const sigset_t *restrict set, sigset_t *restrict old) {
 }
 
 int sigpending(sigset_t *set) {
-  *set = pending;
-  return 0;
-}
-
-/// 保留から `set` に入っている番号を 1 つ取り出す。無ければ 0
-static int take_pending(const sigset_t *set) {
-  for (int sig = 1; sig < _NSIG; sig++) {
-    if (sigismember(&pending, sig) && sigismember(set, sig)) {
-      sigdelset(&pending, sig);
-      return sig;
-    }
-  }
-  return 0;
-}
-
-/// シグナルが配られるまで止まる。カーネルは保留を積むと止まっている poll_oneoff を EINTR で起こし、ランタイムが
-/// 戻るところでハンドラを走らせる。時間切れなら 0、起こされたら -1（EINTR）
-static int wait_for_signal(const struct timespec *timeout) {
-  __wasi_subscription_t subscription = {
-      .u.tag = __WASI_EVENTTYPE_CLOCK,
-      .u.u.clock.id = __WASI_CLOCKID_MONOTONIC,
-      // 締め切りの無い待ちは、届かない限り戻らない長さにする（poll_oneoff は待つものが 1 つは要る）
-      .u.u.clock.timeout = timeout ? (__wasi_timestamp_t)timeout->tv_sec * 1000000000 + timeout->tv_nsec
-                                   : UINT64_MAX / 2,
-  };
-  __wasi_event_t event;
-  size_t nevents;
-  __wasi_errno_t error = __wasi_poll_oneoff(&subscription, &event, 1, &nevents);
-  if (error == __WASI_ERRNO_INTR) {
-    errno = EINTR;
-    return -1;
-  }
+  uint64_t pending = 0;
+  long r = __bos_syscall2(__BOS_SYS_rt_sigpending, __bos_ptr(&pending), 8);
+  if (r < 0)
+    return __browseros_syscall_ret(r);
+  set_of(pending, set);
   return 0;
 }
 
 int sigsuspend(const sigset_t *mask) {
-  sigset_t saved = blocked;
-  unsigned before = handled_count;
-  blocked = *mask;
-  sigdelset(&blocked, SIGKILL);
-  sigdelset(&blocked, SIGSTOP);
-  // 保留にあったものは、マスクを外した時点で配る
-  deliver_pending();
-  // 何か配られるまで待つ（塞いだままのシグナルは保留に入るだけで、起きてもまた待つ）
-  while (handled_count == before)
-    wait_for_signal(0);
-  blocked = saved;
-  deliver_pending();
-  errno = EINTR;
-  return -1;
+  uint64_t value = mask_of(mask);
+  return __browseros_syscall_ret(__bos_syscall2(__BOS_SYS_rt_sigsuspend, __bos_ptr(&value), 8));
 }
 
-int sigtimedwait(const sigset_t *restrict set, siginfo_t *restrict info,
-                 const struct timespec *restrict timeout) {
-  int sig = take_pending(set);
-  if (sig == 0) {
-    // 待っているシグナルは塞がれているので、届けば保留に入る。届くか時間切れまで待つ
-    struct timespec deadline;
-    if (timeout) {
-      clock_gettime(CLOCK_MONOTONIC, &deadline);
-      deadline.tv_sec += timeout->tv_sec;
-      deadline.tv_nsec += timeout->tv_nsec;
-      if (deadline.tv_nsec >= 1000000000) {
-        deadline.tv_sec++;
-        deadline.tv_nsec -= 1000000000;
-      }
-    }
-    while ((sig = take_pending(set)) == 0) {
-      struct timespec rest;
-      if (timeout) {
-        struct timespec now;
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        rest.tv_sec = deadline.tv_sec - now.tv_sec;
-        rest.tv_nsec = deadline.tv_nsec - now.tv_nsec;
-        if (rest.tv_nsec < 0) {
-          rest.tv_sec--;
-          rest.tv_nsec += 1000000000;
-        }
-        if (rest.tv_sec < 0) {
-          errno = EAGAIN;
-          return -1;
-        }
-      }
-      if (wait_for_signal(timeout ? &rest : 0) == 0 && timeout) {
-        if ((sig = take_pending(set)) != 0)
-          break;
-        errno = EAGAIN;
-        return -1;
-      }
-    }
+int sigtimedwait(const sigset_t *restrict set, siginfo_t *restrict info, const struct timespec *restrict timeout) {
+  uint64_t wanted = mask_of(set);
+  struct kernel_siginfo raw;
+  struct kernel_timespec limit;
+  if (timeout) {
+    limit.tv_sec = timeout->tv_sec;
+    limit.tv_nsec = timeout->tv_nsec;
   }
+  long r = __bos_syscall4(__BOS_SYS_rt_sigtimedwait_time64, __bos_ptr(&wanted), __bos_ptr(&raw),
+                          timeout ? __bos_ptr(&limit) : 0, 8);
+  if (r < 0)
+    return __browseros_syscall_ret(r);
   if (info) {
     memset(info, 0, sizeof *info);
-    info->si_signo = sig;
-    info->si_code = SI_USER;
-    info->si_pid = getpid();
+    info->si_signo = raw.signo;
+    info->si_code = raw.code;
+    info->si_pid = raw.pid;
+    info->si_uid = raw.uid;
   }
-  return sig;
+  return r;
 }
 
-int sigwaitinfo(const sigset_t *restrict set, siginfo_t *restrict info) {
-  return sigtimedwait(set, info, 0);
-}
+int sigwaitinfo(const sigset_t *restrict set, siginfo_t *restrict info) { return sigtimedwait(set, info, 0); }
 
 int sigwait(const sigset_t *restrict set, int *restrict sig) {
   int taken = sigwaitinfo(set, 0);

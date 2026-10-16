@@ -25,7 +25,6 @@ __browseros_name_of_address
 __browseros_nocwd_mkdirat
 __browseros_nocwd_openat
 __browseros_pack_strings
-__browseros_report_signals
 __browseros_run_atfork
 __browseros_sem_getvalue
 __browseros_sem_post
@@ -977,6 +976,7 @@ getspent
 getspnam
 getspnam_r
 getsubopt
+gettid
 gettimeofday
 getuid
 getw

@@ -14,9 +14,6 @@ int __browseros_nocwd_openat(int dirfd, const char *path, int oflag, mode_t mode
 /// preopen からの相対パスに `mode & ~umask` の権限でディレクトリを作る。→ create.c
 int __browseros_nocwd_mkdirat(int dirfd, const char *path, mode_t mode);
 
-/// いま無視しているシグナルと、呼んだスレッドが塞いでいるシグナルをカーネルへ知らせる（posix_spawn の子へ継ぐ）。→ signal.c
-void __browseros_report_signals(void);
-
 /// このスレッドでハンドラを走らせた回数。ppoll・sigsuspend が「待つあいだに配られたか」を見る。→ signal.c
 unsigned __browseros_handled_count(void);
 
