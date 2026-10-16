@@ -4699,6 +4699,8 @@
 #define TAB2 0010000
 #define TAB3 0014000
 #define TABDLY 0014000
+#define TCFLSH 0x540B
+#define TCGETS 0x5401
 #define TCIFLUSH 0
 #define TCIOFF 2
 #define TCIOFLUSH 2
@@ -4785,6 +4787,11 @@
 #define TCSADRAIN 1
 #define TCSAFLUSH 2
 #define TCSANOW 0
+#define TCSBRK 0x5409
+#define TCSETS 0x5402
+#define TCSETSF 0x5404
+#define TCSETSW 0x5403
+#define TCXONC 0x540A
 #define TELCMD(x) telcmds[(x)-TELCMD_FIRST]
 #define TELCMD_FIRST xEOF
 #define TELCMD_LAST IAC
@@ -4856,7 +4863,14 @@
 #define TIME_OOP 3
 #define TIME_UTC 1
 #define TIME_WAIT 4
+#define TIOCGPGRP 0x540F
+#define TIOCGPTN 0x80045430
+#define TIOCGSID 0x5429
 #define TIOCGWINSZ 0x5413
+#define TIOCNOTTY 0x5422
+#define TIOCSCTTY 0x540E
+#define TIOCSPGRP 0x5410
+#define TIOCSPTLCK 0x40045431
 #define TIOCSWINSZ 0x5414
 #define TMAGIC "ustar"
 #define TMAGLEN 6

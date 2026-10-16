@@ -990,6 +990,7 @@ globfree
 globfree64
 gmtime
 gmtime_r
+grantpt
 h_errno
 hcreate
 hcreate_r
@@ -1241,6 +1242,7 @@ posix_fadvise
 posix_fallocate
 posix_madvise
 posix_memalign
+posix_openpt
 posix_spawn
 posix_spawn_file_actions_addchdir_np
 posix_spawn_file_actions_addclose
@@ -1371,6 +1373,8 @@ pthread_spin_unlock
 pthread_testcancel
 pthread_timedjoin_np
 pthread_tryjoin_np
+ptsname
+ptsname_r
 putc
 putc_unlocked
 putchar
@@ -1661,6 +1665,7 @@ ungetc
 ungetwc
 unlink
 unlinkat
+unlockpt
 unsetenv
 uselocale
 usleep

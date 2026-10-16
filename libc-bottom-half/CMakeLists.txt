@@ -158,6 +158,7 @@ if (WASI STREQUAL "p1")
     sources/browseros/netdb.c
     sources/browseros/popen.c
     sources/browseros/process.c
+    sources/browseros/pty.c
     sources/browseros/semaphore.c
     sources/browseros/signal.c
     sources/browseros/socket.c

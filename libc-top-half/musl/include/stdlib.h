@@ -134,7 +134,7 @@ void srandom (unsigned int);
 char *initstate (unsigned int, char *, size_t);
 char *setstate (char *);
 int putenv (char *);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no pseudo-terminals */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS has pseudo-terminals */
 int posix_openpt (int);
 int grantpt (int);
 int unlockpt (int);

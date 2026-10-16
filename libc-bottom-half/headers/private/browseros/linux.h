@@ -41,6 +41,7 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_dup 23
 #define __BOS_SYS_dup3 24
 #define __BOS_SYS_fcntl64 25
+#define __BOS_SYS_ioctl 29
 #define __BOS_SYS_flock 32
 #define __BOS_SYS_fchmod 52
 #define __BOS_SYS_fchmodat 53
@@ -72,6 +73,12 @@ long __browseros_syscall_ret(long r);
 #define __BOS_F_SETFD 2
 #define __BOS_F_DUPFD_CLOEXEC 1030
 #define __BOS_STATX_BASIC_STATS 0x7ffu
+#define __BOS_TCGETS 0x5401
+#define __BOS_TCSETS 0x5402
+#define __BOS_TCSBRK 0x5409
+#define __BOS_TCXONC 0x540a
+#define __BOS_TCFLSH 0x540b
+#define __BOS_TIOCGWINSZ 0x5413
 
 /// struct statx（Linux の形。どのアーキテクチャでも同じ）
 struct __bos_statx_timestamp {

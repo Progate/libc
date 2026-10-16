@@ -28,11 +28,6 @@ __browseros_sock_open
 __browseros_sock_recv_from
 __browseros_sock_send_to
 __browseros_sock_setsockopt
-__browseros_tcgetattr
-__browseros_tcsetattr
-__browseros_tty_get_onlcr
-__browseros_tty_ioctl
-__browseros_tty_set_onlcr
 __data_end
 __divtf3
 __eqtf2
