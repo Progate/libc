@@ -7,7 +7,8 @@
 #include <errno.h>
 #include <threads.h>
 
-#ifdef __wasip1__
+// BrowserOS: errno は Linux の値で、WASI の errno とは違う（→ __errno_values.h）
+#if defined(__wasip1__) && !defined(__wasilibc_browseros)
 static_assert(E2BIG == __WASI_ERRNO_2BIG, "Value mismatch");
 static_assert(EACCES == __WASI_ERRNO_ACCES, "Value mismatch");
 static_assert(EADDRINUSE == __WASI_ERRNO_ADDRINUSE, "Value mismatch");

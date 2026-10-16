@@ -1,95 +1,11 @@
-// Linux の syscall の入口を呼ぶ（→ browseros/linux.h）。カーネルが返す Linux の errno を、この libc の errno（WASI の値）に直す。
+// Linux の syscall の入口を呼ぶ（→ browseros/linux.h）。この libc の errno は Linux の値なので、カーネルが返す -errno をそのまま使う。
 
 #include <browseros/linux.h>
 #include <errno.h>
 #include <sys/stat.h>
 
-/// Linux の errno（添字）に当たるこの libc の errno。同じ名前のものを引いた（musl の arch/generic/bits/errno.h と
-/// wasi-libc の __errno_values.h）。この libc に無いもの（ENOTBLK など）は EIO にする
-static const unsigned char errno_of_linux[] = {
-    [1] = EPERM,
-    [2] = ENOENT,
-    [3] = ESRCH,
-    [4] = EINTR,
-    [5] = EIO,
-    [6] = ENXIO,
-    [7] = E2BIG,
-    [8] = ENOEXEC,
-    [9] = EBADF,
-    [10] = ECHILD,
-    [11] = EAGAIN,
-    [12] = ENOMEM,
-    [13] = EACCES,
-    [14] = EFAULT,
-    [16] = EBUSY,
-    [17] = EEXIST,
-    [18] = EXDEV,
-    [19] = ENODEV,
-    [20] = ENOTDIR,
-    [21] = EISDIR,
-    [22] = EINVAL,
-    [23] = ENFILE,
-    [24] = EMFILE,
-    [25] = ENOTTY,
-    [26] = ETXTBSY,
-    [27] = EFBIG,
-    [28] = ENOSPC,
-    [29] = ESPIPE,
-    [30] = EROFS,
-    [31] = EMLINK,
-    [32] = EPIPE,
-    [33] = EDOM,
-    [34] = ERANGE,
-    [35] = EDEADLK,
-    [36] = ENAMETOOLONG,
-    [37] = ENOLCK,
-    [38] = ENOSYS,
-    [39] = ENOTEMPTY,
-    [40] = ELOOP,
-    [42] = ENOMSG,
-    [43] = EIDRM,
-    [67] = ENOLINK,
-    [71] = EPROTO,
-    [72] = EMULTIHOP,
-    [74] = EBADMSG,
-    [75] = EOVERFLOW,
-    [84] = EILSEQ,
-    [88] = ENOTSOCK,
-    [89] = EDESTADDRREQ,
-    [90] = EMSGSIZE,
-    [91] = EPROTOTYPE,
-    [92] = ENOPROTOOPT,
-    [93] = EPROTONOSUPPORT,
-    [95] = ENOTSUP,
-    [97] = EAFNOSUPPORT,
-    [98] = EADDRINUSE,
-    [99] = EADDRNOTAVAIL,
-    [100] = ENETDOWN,
-    [101] = ENETUNREACH,
-    [102] = ENETRESET,
-    [103] = ECONNABORTED,
-    [104] = ECONNRESET,
-    [105] = ENOBUFS,
-    [106] = EISCONN,
-    [107] = ENOTCONN,
-    [110] = ETIMEDOUT,
-    [111] = ECONNREFUSED,
-    [113] = EHOSTUNREACH,
-    [114] = EALREADY,
-    [115] = EINPROGRESS,
-    [116] = ESTALE,
-    [122] = EDQUOT,
-    [125] = ECANCELED,
-    [130] = EOWNERDEAD,
-    [131] = ENOTRECOVERABLE,};
-
 long __browseros_syscall(int nr, int64_t a0, int64_t a1, int64_t a2, int64_t a3, int64_t a4, int64_t a5) {
-  int64_t r = __browseros_linux_syscall(nr, a0, a1, a2, a3, a4, a5);
-  if (r >= 0 || r < -4095)
-    return (long)r;
-  unsigned long linux_errno = (unsigned long)-r;
-  int value = linux_errno < sizeof errno_of_linux ? errno_of_linux[linux_errno] : 0;
-  return -(value ? value : EIO);
+  return (long)__browseros_linux_syscall(nr, a0, a1, a2, a3, a4, a5);
 }
 
 long __browseros_syscall_ret(long r) {

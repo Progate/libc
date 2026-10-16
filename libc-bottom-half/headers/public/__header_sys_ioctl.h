@@ -1,8 +1,9 @@
 #ifndef __wasilibc___header_sys_ioctl_h
 #define __wasilibc___header_sys_ioctl_h
 
-#define FIONREAD 1
-#define FIONBIO 2
+/* BrowserOS: ioctl(2) の要求は Linux（asm-generic/ioctls.h）の値 */
+#define FIONREAD 0x541B
+#define FIONBIO 0x5421
 
 #include <features.h>
 #ifdef __wasilibc_browseros

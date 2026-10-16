@@ -27,7 +27,7 @@ int __wasilibc_nocwd_fstatat(int fd, const char *restrict path, struct stat *res
                              int flag) {
 #if defined(__wasip1__)
   // BrowserOS: カーネルの statx(2) で引く。AT_SYMLINK_NOFOLLOW なら末尾のシンボリックリンクそのもの（lstat）を答える
-  return __browseros_statx(fd, path, flag & AT_SYMLINK_NOFOLLOW ? __BOS_AT_SYMLINK_NOFOLLOW : 0, buf);
+  return __browseros_statx(fd, path, flag, buf);
 #elif defined(__wasip2__) || defined(__wasip3__)
   // Translate the file descriptor to an internal handle
   filesystem_borrow_descriptor_t file_handle;

@@ -30,7 +30,7 @@ int dup2(int fd, int newfd) {
 #ifdef __wasip1__
   // dup2(2) は同じ番号なら、開いているかだけを確かめて何もしない。riscv32 の Linux に dup2 は無く、dup3 で書く
   if (fd == newfd)
-    return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_fcntl64, fd, __BOS_F_GETFD, 0)) < 0 ? -1 : newfd;
+    return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_fcntl64, fd, F_GETFD, 0)) < 0 ? -1 : newfd;
   if (__browseros_syscall_ret(__bos_syscall3(__BOS_SYS_dup3, fd, newfd, 0)) < 0)
     return -1;
   copy_socket(fd, newfd);
@@ -47,7 +47,7 @@ int __dup3(int fd, int newfd, int flags) {
   }
 #ifdef __wasip1__
   // dup3 は同じ番号を渡されたら EINVAL（カーネルが答える）
-  if (__browseros_syscall_ret(__bos_syscall3(__BOS_SYS_dup3, fd, newfd, flags & O_CLOEXEC ? __BOS_O_CLOEXEC : 0)) < 0)
+  if (__browseros_syscall_ret(__bos_syscall3(__BOS_SYS_dup3, fd, newfd, flags)) < 0)
     return -1;
   copy_socket(fd, newfd);
   return newfd;

@@ -9,7 +9,8 @@
 
 #include <__mode_t.h>
 
-#define UTIME_NOW (-1)
-#define UTIME_OMIT (-2)
+/* BrowserOS: utimensat(2) の特別な tv_nsec は Linux の値 */
+#define UTIME_NOW  0x3fffffff
+#define UTIME_OMIT 0x3ffffffe
 
 #endif

@@ -3,8 +3,10 @@
 
 #include <__struct_rusage.h>
 
-#define RUSAGE_SELF 1
-#define RUSAGE_CHILDREN 2
+/* BrowserOS: getrusage(2) の who は Linux の値 */
+#define RUSAGE_SELF 0
+#define RUSAGE_CHILDREN (-1)
+#define RUSAGE_THREAD 1
 
 #ifdef __cplusplus
 extern "C" {

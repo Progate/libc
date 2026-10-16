@@ -1,6 +1,6 @@
 #include "pthread_impl.h"
 
-#ifndef __wasilibc_unmodified_upstream
+#if !defined(__wasilibc_unmodified_upstream) && !defined(__wasilibc_browseros)
 #include <common/clock.h>
 #endif
 
@@ -73,7 +73,7 @@ int __pthread_cond_timedwait(pthread_cond_t *restrict c, pthread_mutex_t *restri
 {
 	struct waiter node = { 0 };
 	int e, seq, clock = c->_c_clock, cs, shared=0, oldstate, tmp;
-#ifndef __wasilibc_unmodified_upstream
+#if !defined(__wasilibc_unmodified_upstream) && !defined(__wasilibc_browseros)
 	struct __clockid clock_id = { .id = clock };
 #endif
 	volatile int *fut;
@@ -110,7 +110,7 @@ int __pthread_cond_timedwait(pthread_cond_t *restrict c, pthread_mutex_t *restri
 	__pthread_setcancelstate(PTHREAD_CANCEL_MASKED, &cs);
 	if (cs == PTHREAD_CANCEL_DISABLE) __pthread_setcancelstate(cs, 0);
 
-#ifdef __wasilibc_unmodified_upstream
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS: clockid_t は Linux と同じ番号 */
 	do e = __timedwait_cp(fut, seq, clock, ts, !shared);
 #else
 	do e = __timedwait_cp(fut, seq, &clock_id, ts, !shared);

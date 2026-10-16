@@ -506,10 +506,9 @@ int pipe2(int fd[2], int flags) {
   }
 #if defined(__wasip1__)
   // BrowserOS: パイプはカーネルの開いたファイルの表にある（64KiB・EOF・EPIPE は pipe(7) と同じ）。カーネルの pipe2(2) に
-  // Linux のフラグの値で渡す
+  // フラグをそのまま渡す（O_NONBLOCK・O_CLOEXEC はこの libc と Linux で同じ値）
   int32_t fds[2];
-  int linux_flags = (flags & O_NONBLOCK ? __BOS_O_NONBLOCK : 0) | (flags & O_CLOEXEC ? __BOS_O_CLOEXEC : 0);
-  if (__browseros_syscall_ret(__bos_syscall2(__BOS_SYS_pipe2, __bos_ptr(fds), linux_flags)) < 0)
+  if (__browseros_syscall_ret(__bos_syscall2(__BOS_SYS_pipe2, __bos_ptr(fds), flags)) < 0)
     return -1;
   fd[0] = fds[0];
   fd[1] = fds[1];

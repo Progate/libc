@@ -18,6 +18,15 @@
 #endif
 
 int ioctl(int fildes, int request, ...) {
+#ifdef __wasilibc_browseros
+  // BrowserOS: 要求はどれもカーネルの ioctl(2) に任せる（FIONREAD・FIONBIO・端末の要求。値は Linux と同じ。知らない要求は
+  // ENOTTY）
+  va_list ap;
+  va_start(ap, request);
+  void *argument = va_arg(ap, void *);
+  va_end(ap);
+  return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_ioctl, fildes, request, __bos_ptr(argument)));
+#else
   switch (request) {
     case FIONREAD: {
 #if defined(__wasip1__)
@@ -117,18 +126,10 @@ int ioctl(int fildes, int request, ...) {
 #endif
     }
     default: {
-#ifdef __wasilibc_browseros
-      // BrowserOS: ほかの要求はカーネルの ioctl(2) に任せる（端末の要求は Linux の値。知らない要求は ENOTTY）
-      va_list ap;
-      va_start(ap, request);
-      void *argument = va_arg(ap, void *);
-      va_end(ap);
-      return __browseros_syscall_ret(__bos_syscall3(__BOS_SYS_ioctl, fildes, request, __bos_ptr(argument)));
-#else
       // Invalid request.
       errno = EINVAL;
       return -1;
-#endif
     }
   }
+#endif
 }

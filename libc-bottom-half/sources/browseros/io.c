@@ -5,7 +5,7 @@
 // どれもカーネルの Linux の syscall（read(2)・write(2)・_llseek(2)・getdents64(2)・ppoll(2)・clock_gettime(2) ほか）を
 // 呼ぶだけである（→ browser-os の src/wasi/linux/io.ts）。読む端の無いパイプへ書いたときの SIGPIPE もカーネルが送る。
 //
-// この libc のヘッダーの値（POLL*・DT_*・clockid_t）は WASI のもので Linux と違うので、ここで直す。
+// この libc のヘッダーの値（POLL*・DT_*・clockid_t）は Linux と同じなので、そのまま渡す。
 
 #define _GNU_SOURCE
 #include <browseros/libc.h>
@@ -26,7 +26,6 @@
 #include <unistd.h>
 #include <wasi/api.h>
 #include <wasi/libc.h>
-#include <common/clock.h>
 
 #define SYS_close 57
 #define SYS_getdents64 61
@@ -129,25 +128,6 @@ int fdatasync(int fd) { return ret(__bos_syscall1(SYS_fdatasync, fd)); }
 
 int ftruncate(int fd, off_t length) { return ret(__bos_syscall2(SYS_ftruncate64, fd, length)); }
 
-// poll(2) の出来事（Linux の値）
-#define LINUX_POLLIN 0x1
-#define LINUX_POLLPRI 0x2
-#define LINUX_POLLOUT 0x4
-#define LINUX_POLLERR 0x8
-#define LINUX_POLLHUP 0x10
-#define LINUX_POLLNVAL 0x20
-
-static short to_linux_events(short events) {
-  return (events & POLLIN ? LINUX_POLLIN : 0) | (events & POLLOUT ? LINUX_POLLOUT : 0) |
-         (events & POLLPRI ? LINUX_POLLPRI : 0);
-}
-
-static short from_linux_events(short events) {
-  return (events & LINUX_POLLIN ? POLLIN : 0) | (events & LINUX_POLLOUT ? POLLOUT : 0) |
-         (events & LINUX_POLLPRI ? POLLPRI : 0) | (events & LINUX_POLLERR ? POLLERR : 0) |
-         (events & LINUX_POLLHUP ? POLLHUP : 0) | (events & LINUX_POLLNVAL ? POLLNVAL : 0);
-}
-
 /// カーネルの struct timespec（64 ビットの秒とナノ秒）
 struct kernel_timespec {
   int64_t tv_sec;
@@ -167,15 +147,8 @@ int ppoll(struct pollfd *fds, nfds_t count, const struct timespec *timeout, cons
   uint64_t raw_mask = 0;
   if (mask)
     memcpy(&raw_mask, mask, sizeof raw_mask);
-  for (nfds_t i = 0; i < count; i++)
-    fds[i].events = to_linux_events(fds[i].events);
-  long r = __bos_syscall5(SYS_ppoll_time64, __bos_ptr(fds), count, timeout ? __bos_ptr(&limit) : 0,
-                          mask ? __bos_ptr(&raw_mask) : 0, 8);
-  for (nfds_t i = 0; i < count; i++) {
-    fds[i].events = from_linux_events(fds[i].events);
-    fds[i].revents = from_linux_events(fds[i].revents);
-  }
-  return ret(r);
+  return ret(__bos_syscall5(SYS_ppoll_time64, __bos_ptr(fds), count, timeout ? __bos_ptr(&limit) : 0,
+                            mask ? __bos_ptr(&raw_mask) : 0, 8));
 }
 
 int poll(struct pollfd *fds, nfds_t count, int timeout) {
@@ -185,13 +158,9 @@ int poll(struct pollfd *fds, nfds_t count, int timeout) {
   return ppoll(fds, count, &limit, 0);
 }
 
-/// wasi-libc の clockid_t（WASI の時計の番号を持つ構造体へのポインタ）を Linux の clockid にする。番号は同じ並び
-/// （REALTIME 0・MONOTONIC 1・PROCESS_CPUTIME_ID 2・THREAD_CPUTIME_ID 3）
-static int linux_clock(clockid_t clock) { return clock ? (int)clock->id : -1; }
-
 int __clock_gettime(clockid_t clock, struct timespec *tp) {
   struct kernel_timespec raw;
-  long r = __bos_syscall2(SYS_clock_gettime64, linux_clock(clock), __bos_ptr(&raw));
+  long r = __bos_syscall2(SYS_clock_gettime64, clock, __bos_ptr(&raw));
   if (r < 0)
     return ret(r);
   tp->tv_sec = raw.tv_sec;
@@ -203,7 +172,7 @@ __attribute__((__weak__, __alias__("__clock_gettime"))) int clock_gettime(clocki
 
 int clock_getres(clockid_t clock, struct timespec *resolution) {
   struct kernel_timespec raw;
-  long r = __bos_syscall2(SYS_clock_getres_time64, linux_clock(clock), __bos_ptr(&raw));
+  long r = __bos_syscall2(SYS_clock_getres_time64, clock, __bos_ptr(&raw));
   if (r < 0)
     return ret(r);
   if (resolution) {
@@ -216,7 +185,7 @@ int clock_getres(clockid_t clock, struct timespec *resolution) {
 /// clock_nanosleep(3) はエラーを errno ではなく戻り値で返す
 int clock_nanosleep(clockid_t clock, int flags, const struct timespec *request, struct timespec *remain) {
   struct kernel_timespec raw_request = {request->tv_sec, request->tv_nsec}, raw_remain = {0, 0};
-  long r = __bos_syscall4(SYS_clock_nanosleep_time64, linux_clock(clock), flags & TIMER_ABSTIME ? 1 : 0,
+  long r = __bos_syscall4(SYS_clock_nanosleep_time64, clock, flags & TIMER_ABSTIME ? 1 : 0,
                           __bos_ptr(&raw_request), remain ? __bos_ptr(&raw_remain) : 0);
   if (r == -EINTR && remain) {
     remain->tv_sec = raw_remain.tv_sec;
@@ -273,7 +242,7 @@ int getentropy(void *buffer, size_t length) {
 }
 
 // ディレクトリの読み出し（opendir は paths.c）。カーネルの getdents64(2) で struct linux_dirent64 の並びを受け取り、
-// この libc の struct dirent（d_ino・d_type・d_name）に直す。位置は読んだ項目の数で、telldir・seekdir はそれを使う
+// この libc の struct dirent（d_ino・d_type・d_name）に写す（d_type は Linux と同じ値）。位置は読んだ項目の数で、telldir・seekdir はそれを使う
 // （musl の src/dirent と同じ作り）
 
 struct linux_dirent64 {
@@ -292,28 +261,6 @@ struct _DIR {
   char buf[2048];
   struct dirent *dirent;
 };
-
-/// Linux の d_type をこの libc の値にする
-static unsigned char libc_type(unsigned char type) {
-  switch (type) {
-  case 1:
-    return DT_FIFO;
-  case 2:
-    return DT_CHR;
-  case 4:
-    return DT_DIR;
-  case 6:
-    return DT_BLK;
-  case 8:
-    return DT_REG;
-  case 10:
-    return DT_LNK;
-  case 12:
-    return DT_SOCK;
-  default:
-    return DT_UNKNOWN;
-  }
-}
 
 DIR *fdopendir(int fd) {
   struct stat st;
@@ -351,7 +298,7 @@ struct dirent *readdir(DIR *dir) {
   dir->buf_pos += raw->d_reclen;
   dir->tell = raw->d_off;
   dir->dirent->d_ino = raw->d_ino;
-  dir->dirent->d_type = libc_type(raw->d_type);
+  dir->dirent->d_type = raw->d_type;
   strncpy(dir->dirent->d_name, raw->d_name, NAME_MAX);
   dir->dirent->d_name[NAME_MAX] = '\0';
   return dir->dirent;

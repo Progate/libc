@@ -68,7 +68,7 @@ int pthread_barrierattr_getpshared(const pthread_barrierattr_t *restrict a, int 
 	return 0;
 }
 
-#ifdef __wasilibc_unmodified_upstream /* Forward declaration of WASI's `__clockid` type. */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* BrowserOS: clockid_t は Linux と同じ番号 */
 int pthread_condattr_getclock(const pthread_condattr_t *restrict a, clockid_t *restrict clk)
 {
 	*clk = a->__attr & 0x7fffffff;

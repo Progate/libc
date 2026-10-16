@@ -4,9 +4,8 @@
 // 戻り値・フラグ・構造体は riscv32 の Linux のもの（rv32 の ILP32、time_t は 64 ビット。番号は asm-generic/unistd.h）で、
 // 失敗は `-errno`（Linux の値）で返る。カーネルが知らない番号は `-ENOSYS` で返る。
 //
-// この libc のヘッダーの errno は WASI の値なので、`__browseros_syscall` は Linux の errno をこの libc の値に直して
-// 返す（musl の `__syscall` と同じく、成功は 0 以上、失敗は `-errno`）。フラグの値が Linux と違うもの（`O_*`・`AT_*`）は、
-// 呼ぶ側が Linux の値（下の `__BOS_*`）に直して渡す。
+// この libc のヘッダーの値（errno・`O_*`・`AT_*`・`AF_*` など）は Linux と同じなので、引数も戻り値も直さずに渡す。
+// `__browseros_syscall` は musl の `__syscall` と同じく、成功なら 0 以上、失敗なら `-errno` を返す。
 //
 // カーネルの側は browser-os の src/wasi/linux/ にある。
 
@@ -19,7 +18,7 @@ __attribute__((import_module("browser_os_linux"), import_name("syscall")))
 int64_t __browseros_linux_syscall(int32_t nr, int64_t a0, int64_t a1, int64_t a2, int64_t a3, int64_t a4,
                                   int64_t a5);
 
-/// syscall を呼ぶ。成功なら 0 以上、失敗なら `-errno`（この libc の値）
+/// syscall を呼ぶ。成功なら 0 以上、失敗なら `-errno`
 long __browseros_syscall(int nr, int64_t a0, int64_t a1, int64_t a2, int64_t a3, int64_t a4, int64_t a5);
 
 /// `__browseros_syscall` の戻り値を C の関数の戻り値にする（失敗なら errno を置いて -1）

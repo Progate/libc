@@ -1,17 +1,22 @@
 #ifndef __wasilibc___header_dirent_h
 #define __wasilibc___header_dirent_h
 
+/*
+ * BrowserOS: d_type は Linux（musl の include/dirent.h）の値にする。カーネルの getdents64(2) が返す d_type をそのまま
+ * 使える。S_IF* との変換も Linux と同じ式になる
+ */
 #define DT_UNKNOWN 0
-#define DT_BLK 1
+#define DT_FIFO 1
 #define DT_CHR 2
-#define DT_DIR 3
-#define DT_REG 4
-#define DT_FIFO 6
-#define DT_LNK 7
-#define DT_SOCK 20
+#define DT_DIR 4
+#define DT_BLK 6
+#define DT_REG 8
+#define DT_LNK 10
+#define DT_SOCK 12
+#define DT_WHT 14
 
-#define IFTODT(x) (__wasilibc_iftodt(x))
-#define DTTOIF(x) (__wasilibc_dttoif(x))
+#define IFTODT(x) ((x)>>12 & 017)
+#define DTTOIF(x) ((x)<<12)
 
 #include <__struct_dirent.h>
 #include <__typedef_DIR.h>

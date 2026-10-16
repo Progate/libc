@@ -4,21 +4,22 @@
 #include <__struct_pollfd.h>
 #include <__typedef_nfds_t.h>
 
-#define POLLRDNORM 0x1
-#define POLLWRNORM 0x2
-
-#define POLLIN POLLRDNORM
-#define POLLOUT POLLWRNORM
-
-// POLLPRI is defined for source compatibility. WASI has no out-of-band
-// data, so POLLPRI is never reported in revents. poll() silently strips
-// it when other events are present and returns ENOSYS when it is the
-// only requested event.
-#define POLLPRI 0x0200
-
-#define POLLERR 0x1000
-#define POLLHUP 0x2000
-#define POLLNVAL 0x4000
+/*
+ * BrowserOS: poll(2) の出来事は Linux（musl の include/poll.h と arch/generic/bits/poll.h）の値にする。カーネルの
+ * ppoll(2) へそのまま渡せる
+ */
+#define POLLIN     0x001
+#define POLLPRI    0x002
+#define POLLOUT    0x004
+#define POLLERR    0x008
+#define POLLHUP    0x010
+#define POLLNVAL   0x020
+#define POLLRDNORM 0x040
+#define POLLRDBAND 0x080
+#define POLLWRNORM 0x100
+#define POLLWRBAND 0x200
+#define POLLMSG    0x400
+#define POLLRDHUP  0x2000
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,12 +1,9 @@
-// BrowserOS のカーネルが渡すホスト関数（wasip1 の ABI に無い syscall）。
+// BrowserOS のカーネルが前に渡していたホスト関数（`browser_os_fs` / `browser_os_process` の名前空間）の宣言。
 //
-// BrowserOS（@progate/browser-os）は、WASI preview1 に無い fork / exec / pipe / dup / flock / chmod などを
-// `browser_os_fs` / `browser_os_process` の名前空間のホスト関数として渡す。この libc はそれを使って
-// POSIX の関数（posix_spawn・pipe・dup2・waitpid・flock・chmod・stat の権限のビット・SIGPIPE）を本物の
-// 意味論で持つ。戻り値はどれも WASI の errno で、wasi-libc の errno の値は WASI の値そのものなので、
-// そのまま errno に置ける。
-//
-// ホスト関数の中身と意味論は browser-os の src/wasi/fs.ts と src/process/wasi-spawn.ts にある。
+// この libc はもうこれらを呼ばない。カーネルを呼ぶのは Linux の syscall の入口だけである（→ browseros/linux.h）。
+// カーネルは publish 済みのプログラムのためにこれらを凍結して残している。戻り値は WASI の errno で、この libc の
+// errno（Linux の値）とは違うので、呼ぶなら errno に置く前に直すこと。ここに残るのは、file actions のバイト列などの
+// 並べ方を表す定数と型を共有するためである。
 
 #ifndef __BROWSEROS_HOST_H
 #define __BROWSEROS_HOST_H

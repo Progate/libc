@@ -7,7 +7,7 @@
 // カーネルの *at(2) に渡す。`AT_FDCWD` からの相対パスはカーネルが作業ディレクトリから引き、新しく作るものの権限
 // （mode & ~umask）もカーネルが付ける。
 //
-// この libc のヘッダーの値（O_*・AT_*・UTIME_*）は WASI のもので Linux と違うので、ここで Linux の値に直して渡す。
+// この libc のヘッダーの値（O_*・AT_*・UTIME_*）は Linux と同じなので、フラグはそのまま渡す。
 
 #define _GNU_SOURCE
 #include <browseros/linux.h>
@@ -28,57 +28,6 @@
 #include <wasi/libc-nocwd.h>
 #include <wasi/libc.h>
 
-// open(2) のフラグ（Linux の値。asm-generic/fcntl.h）
-#define LINUX_O_WRONLY 01
-#define LINUX_O_RDWR 02
-#define LINUX_O_CREAT 0100
-#define LINUX_O_EXCL 0200
-#define LINUX_O_TRUNC 01000
-#define LINUX_O_APPEND 02000
-#define LINUX_O_NONBLOCK 04000
-#define LINUX_O_DSYNC 010000
-#define LINUX_O_DIRECTORY 0200000
-#define LINUX_O_NOFOLLOW 0400000
-#define LINUX_O_CLOEXEC 02000000
-#define LINUX_O_SYNC 04010000
-// *at(2) のフラグ（Linux の値）
-#define LINUX_AT_SYMLINK_NOFOLLOW 0x100
-#define LINUX_AT_REMOVEDIR 0x200
-#define LINUX_AT_SYMLINK_FOLLOW 0x400
-// utimensat(2) の特別な tv_nsec（Linux の値）
-#define LINUX_UTIME_NOW 0x3fffffff
-#define LINUX_UTIME_OMIT 0x3ffffffe
-
-/// この libc の open のフラグを Linux の値にする
-static int linux_open_flags(int flags) {
-  int accmode = flags & O_ACCMODE;
-  int result = (accmode & O_RDWR) == O_RDWR ? LINUX_O_RDWR : accmode & O_WRONLY ? LINUX_O_WRONLY : 0;
-  if (flags & O_CREAT)
-    result |= LINUX_O_CREAT;
-  if (flags & O_EXCL)
-    result |= LINUX_O_EXCL;
-  if (flags & O_TRUNC)
-    result |= LINUX_O_TRUNC;
-  if (flags & O_APPEND)
-    result |= LINUX_O_APPEND;
-  if (flags & O_NONBLOCK)
-    result |= LINUX_O_NONBLOCK;
-  if (flags & (O_SYNC | O_RSYNC))
-    result |= LINUX_O_SYNC;
-  else if (flags & O_DSYNC)
-    result |= LINUX_O_DSYNC;
-  if (flags & O_DIRECTORY)
-    result |= LINUX_O_DIRECTORY;
-  if (flags & O_NOFOLLOW)
-    result |= LINUX_O_NOFOLLOW;
-  if (flags & O_CLOEXEC)
-    result |= LINUX_O_CLOEXEC;
-  return result;
-}
-
-/// この libc の AT_FDCWD を Linux の値にする
-static int linux_dirfd(int fd) { return fd == AT_FDCWD ? __BOS_AT_FDCWD : fd; }
-
 static int ret(long r) { return __browseros_syscall_ret(r); }
 
 int openat(int fd, const char *path, int flags, ...) {
@@ -89,7 +38,7 @@ int openat(int fd, const char *path, int flags, ...) {
     mode = va_arg(ap, mode_t);
     va_end(ap);
   }
-  return ret(__bos_syscall4(__BOS_SYS_openat, linux_dirfd(fd), __bos_ptr(path), linux_open_flags(flags), mode));
+  return ret(__bos_syscall4(__BOS_SYS_openat, fd, __bos_ptr(path), flags, mode));
 }
 
 int open(const char *path, int flags, ...) {
@@ -106,10 +55,9 @@ int open(const char *path, int flags, ...) {
 int __wasilibc_open_nomode(const char *path, int flags) { return openat(AT_FDCWD, path, flags, 0); }
 
 int faccessat(int fd, const char *path, int mode, int flags) {
-  int linux_flags = flags & AT_SYMLINK_NOFOLLOW ? LINUX_AT_SYMLINK_NOFOLLOW : 0;
-  if (linux_flags)
-    return ret(__bos_syscall4(__BOS_SYS_faccessat2, linux_dirfd(fd), __bos_ptr(path), mode, linux_flags));
-  return ret(__bos_syscall3(__BOS_SYS_faccessat, linux_dirfd(fd), __bos_ptr(path), mode));
+  if (flags)
+    return ret(__bos_syscall4(__BOS_SYS_faccessat2, fd, __bos_ptr(path), mode, flags));
+  return ret(__bos_syscall3(__BOS_SYS_faccessat, fd, __bos_ptr(path), mode));
 }
 
 int access(const char *path, int mode) { return faccessat(AT_FDCWD, path, mode, 0); }
@@ -117,7 +65,7 @@ int access(const char *path, int mode) { return faccessat(AT_FDCWD, path, mode, 
 int __wasilibc_access(const char *path, int mode, int flags) { return faccessat(AT_FDCWD, path, mode, flags); }
 
 ssize_t readlinkat(int fd, const char *restrict path, char *restrict buf, size_t size) {
-  return ret(__bos_syscall4(__BOS_SYS_readlinkat, linux_dirfd(fd), __bos_ptr(path), __bos_ptr(buf), size));
+  return ret(__bos_syscall4(__BOS_SYS_readlinkat, fd, __bos_ptr(path), __bos_ptr(buf), size));
 }
 
 ssize_t readlink(const char *restrict path, char *restrict buf, size_t size) {
@@ -125,14 +73,13 @@ ssize_t readlink(const char *restrict path, char *restrict buf, size_t size) {
 }
 
 int symlinkat(const char *target, int fd, const char *path) {
-  return ret(__bos_syscall3(__BOS_SYS_symlinkat, __bos_ptr(target), linux_dirfd(fd), __bos_ptr(path)));
+  return ret(__bos_syscall3(__BOS_SYS_symlinkat, __bos_ptr(target), fd, __bos_ptr(path)));
 }
 
 int symlink(const char *target, const char *path) { return symlinkat(target, AT_FDCWD, path); }
 
 int linkat(int oldfd, const char *oldpath, int newfd, const char *newpath, int flags) {
-  return ret(__bos_syscall5(__BOS_SYS_linkat, linux_dirfd(oldfd), __bos_ptr(oldpath), linux_dirfd(newfd),
-                            __bos_ptr(newpath), flags & AT_SYMLINK_FOLLOW ? LINUX_AT_SYMLINK_FOLLOW : 0));
+  return ret(__bos_syscall5(__BOS_SYS_linkat, oldfd, __bos_ptr(oldpath), newfd, __bos_ptr(newpath), flags));
 }
 
 int link(const char *oldpath, const char *newpath) { return linkat(AT_FDCWD, oldpath, AT_FDCWD, newpath, 0); }
@@ -150,14 +97,13 @@ int __wasilibc_link_newat(const char *oldpath, int newfd, const char *newpath, i
 }
 
 int mkdirat(int fd, const char *path, mode_t mode) {
-  return ret(__bos_syscall3(__BOS_SYS_mkdirat, linux_dirfd(fd), __bos_ptr(path), mode));
+  return ret(__bos_syscall3(__BOS_SYS_mkdirat, fd, __bos_ptr(path), mode));
 }
 
 int mkdir(const char *path, mode_t mode) { return mkdirat(AT_FDCWD, path, mode); }
 
 int unlinkat(int fd, const char *path, int flags) {
-  return ret(__bos_syscall3(__BOS_SYS_unlinkat, linux_dirfd(fd), __bos_ptr(path),
-                            flags & AT_REMOVEDIR ? LINUX_AT_REMOVEDIR : 0));
+  return ret(__bos_syscall3(__BOS_SYS_unlinkat, fd, __bos_ptr(path), flags));
 }
 
 int unlink(const char *path) { return unlinkat(AT_FDCWD, path, 0); }
@@ -177,8 +123,7 @@ int remove(const char *path) {
 }
 
 int renameat(int oldfd, const char *oldpath, int newfd, const char *newpath) {
-  return ret(__bos_syscall5(__BOS_SYS_renameat2, linux_dirfd(oldfd), __bos_ptr(oldpath), linux_dirfd(newfd),
-                            __bos_ptr(newpath), 0));
+  return ret(__bos_syscall5(__BOS_SYS_renameat2, oldfd, __bos_ptr(oldpath), newfd, __bos_ptr(newpath), 0));
 }
 
 int rename(const char *oldpath, const char *newpath) { return renameat(AT_FDCWD, oldpath, AT_FDCWD, newpath); }
@@ -214,7 +159,7 @@ char *getcwd(char *buf, size_t size) {
 }
 
 int fstatat(int fd, const char *restrict path, struct stat *restrict buf, int flags) {
-  return __browseros_statx(linux_dirfd(fd), path, flags & AT_SYMLINK_NOFOLLOW ? __BOS_AT_SYMLINK_NOFOLLOW : 0, buf);
+  return __browseros_statx(fd, path, flags, buf);
 }
 
 int stat(const char *restrict path, struct stat *restrict buf) { return fstatat(AT_FDCWD, path, buf, 0); }
@@ -233,21 +178,16 @@ struct kernel_timespec {
   int64_t tv_nsec;
 };
 
-static int64_t linux_nsec(long nsec) {
-  return nsec == UTIME_NOW ? LINUX_UTIME_NOW : nsec == UTIME_OMIT ? LINUX_UTIME_OMIT : nsec;
-}
-
 /// utimensat(2)。`path` が NULL なら `fd` そのもの（futimens）
 static int kernel_utimensat(int fd, const char *path, const struct timespec times[2], int flags) {
   struct kernel_timespec raw[2];
   if (times) {
     for (int i = 0; i < 2; i++) {
       raw[i].tv_sec = times[i].tv_sec;
-      raw[i].tv_nsec = linux_nsec(times[i].tv_nsec);
+      raw[i].tv_nsec = times[i].tv_nsec;
     }
   }
-  return ret(__bos_syscall4(__BOS_SYS_utimensat_time64, linux_dirfd(fd), __bos_ptr(path), times ? __bos_ptr(raw) : 0,
-                            flags & AT_SYMLINK_NOFOLLOW ? LINUX_AT_SYMLINK_NOFOLLOW : 0));
+  return ret(__bos_syscall4(__BOS_SYS_utimensat_time64, fd, __bos_ptr(path), times ? __bos_ptr(raw) : 0, flags));
 }
 
 int utimensat(int fd, const char *path, const struct timespec times[2], int flags) {
@@ -257,6 +197,8 @@ int utimensat(int fd, const char *path, const struct timespec times[2], int flag
   }
   return kernel_utimensat(fd, path, times, flags);
 }
+
+int futimens(int fd, const struct timespec times[2]) { return kernel_utimensat(fd, 0, times, 0); }
 
 int __wasilibc_utimens(const char *path, const struct timespec times[2], int flags) {
   return utimensat(AT_FDCWD, path, times, flags);
@@ -283,7 +225,7 @@ int fchmodat(int fd, const char *path, mode_t mode, int flags) {
     errno = ENOTSUP;
     return -1;
   }
-  return ret(__bos_syscall3(__BOS_SYS_fchmodat, linux_dirfd(fd), __bos_ptr(path), mode));
+  return ret(__bos_syscall3(__BOS_SYS_fchmodat, fd, __bos_ptr(path), mode));
 }
 
 int chmod(const char *path, mode_t mode) { return fchmodat(AT_FDCWD, path, mode, 0); }
@@ -291,8 +233,7 @@ int chmod(const char *path, mode_t mode) { return fchmodat(AT_FDCWD, path, mode,
 int fchmod(int fd, mode_t mode) { return ret(__bos_syscall2(__BOS_SYS_fchmod, fd, mode)); }
 
 int fchownat(int fd, const char *path, uid_t owner, gid_t group, int flags) {
-  return ret(__bos_syscall5(__BOS_SYS_fchownat, linux_dirfd(fd), __bos_ptr(path), owner, group,
-                            flags & AT_SYMLINK_NOFOLLOW ? LINUX_AT_SYMLINK_NOFOLLOW : 0));
+  return ret(__bos_syscall5(__BOS_SYS_fchownat, fd, __bos_ptr(path), owner, group, flags));
 }
 
 int chown(const char *path, uid_t owner, gid_t group) { return fchownat(AT_FDCWD, path, owner, group, 0); }
@@ -351,3 +292,66 @@ int fstatvfs(int fd, struct statvfs *buf) {
   errno = ENOSYS;
   return -1;
 }
+
+/// posix_fadvise(3)。先読みの助言は受け取るだけで、効き目は無い（Linux と同じく、開いていなければ EBADF、パイプなら
+/// ESPIPE、知らない助言なら EINVAL）。失敗は errno ではなく戻り値で返す
+int posix_fadvise(int fd, off_t offset, off_t length, int advice) {
+  (void)offset;
+  struct stat st;
+  if (fstat(fd, &st) != 0)
+    return errno;
+  if (S_ISFIFO(st.st_mode))
+    return ESPIPE;
+  if (advice < POSIX_FADV_NORMAL || advice > POSIX_FADV_NOREUSE || length < 0)
+    return EINVAL;
+  return 0;
+}
+
+/// posix_fallocate(3)。足りなければ ftruncate で伸ばす（FS は場所を前もって取らないので、大きさだけが変わる）。
+/// 失敗は errno ではなく戻り値で返す
+int posix_fallocate(int fd, off_t offset, off_t length) {
+  if (offset < 0 || length <= 0)
+    return EINVAL;
+  struct stat st;
+  if (fstat(fd, &st) != 0)
+    return errno;
+  if (S_ISFIFO(st.st_mode))
+    return ESPIPE;
+  if (!S_ISREG(st.st_mode))
+    return ENODEV;
+  if (offset + length > st.st_size && ftruncate(fd, offset + length) != 0)
+    return errno == EINVAL ? EBADF : errno;
+  return 0;
+}
+
+// wasi-libc の「作業ディレクトリを使わない」版（<wasi/libc-nocwd.h>）。この libc の *at はカーネルへそのまま渡すので、
+// 同じ関数を呼ぶ
+int __wasilibc_nocwd_openat_nomode(int fd, const char *path, int flags) { return openat(fd, path, flags, 0); }
+
+int __wasilibc_nocwd_faccessat(int fd, const char *path, int mode, int flags) {
+  return faccessat(fd, path, mode, flags);
+}
+
+ssize_t __wasilibc_nocwd_readlinkat(int fd, const char *restrict path, char *restrict buf, size_t size) {
+  return readlinkat(fd, path, buf, size);
+}
+
+int __wasilibc_nocwd_symlinkat(const char *target, int fd, const char *path) { return symlinkat(target, fd, path); }
+
+int __wasilibc_nocwd_linkat(int oldfd, const char *oldpath, int newfd, const char *newpath, int flags) {
+  return linkat(oldfd, oldpath, newfd, newpath, flags);
+}
+
+int __wasilibc_nocwd_renameat(int oldfd, const char *oldpath, int newfd, const char *newpath) {
+  return renameat(oldfd, oldpath, newfd, newpath);
+}
+
+int __wasilibc_nocwd_mkdirat_nomode(int fd, const char *path) { return mkdirat(fd, path, 0777); }
+
+int __wasilibc_nocwd_utimensat(int fd, const char *path, const struct timespec times[2], int flags) {
+  return utimensat(fd, path, times, flags);
+}
+
+int __wasilibc_nocwd___wasilibc_unlinkat(int fd, const char *path) { return unlinkat(fd, path, 0); }
+
+int __wasilibc_nocwd___wasilibc_rmdirat(int fd, const char *path) { return unlinkat(fd, path, AT_REMOVEDIR); }

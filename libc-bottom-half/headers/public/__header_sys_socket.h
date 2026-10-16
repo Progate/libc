@@ -8,9 +8,13 @@
 #include <wasi/version.h>
 #include <features.h>
 
-#define SHUT_RD 1
-#define SHUT_WR 2
-#define SHUT_RDWR (SHUT_RD | SHUT_WR)
+/*
+ * BrowserOS: ソケットの値（SHUT_*・MSG_*・SOL_*・SO_*・SOCK_*・PF_*・AF_*）は Linux（musl の include/sys/socket.h。
+ * riscv32 の 32 ビットの long）のものにする。カーネルの socket(2) などへそのまま渡せる
+ */
+#define SHUT_RD 0
+#define SHUT_WR 1
+#define SHUT_RDWR 2
 
 #if defined(__wasip1__) && defined(__wasilibc_browseros)
 /*
@@ -27,6 +31,16 @@
 #define MSG_WAITALL 0x0100
 #define MSG_NOSIGNAL 0x4000
 #define MSG_MORE 0x8000
+#define MSG_PROBE 0x0010
+#define MSG_FIN 0x0200
+#define MSG_SYN 0x0400
+#define MSG_CONFIRM 0x0800
+#define MSG_RST 0x1000
+#define MSG_ERRQUEUE 0x2000
+#define MSG_WAITFORONE 0x10000
+#define MSG_BATCH 0x40000
+#define MSG_ZEROCOPY 0x4000000
+#define MSG_FASTOPEN 0x20000000
 #define MSG_CMSG_CLOEXEC 0x40000000
 
 #define SOL_IP 0
@@ -34,7 +48,7 @@
 #define SOL_UDP 17
 #define SOL_IPV6 41
 
-#define SOMAXCONN 4096
+#define SOMAXCONN 128
 
 #define SO_DEBUG 1
 #define SO_REUSEADDR 2
@@ -45,17 +59,31 @@
 #define SO_RCVBUF 8
 #define SO_KEEPALIVE 9
 #define SO_OOBINLINE 10
+#define SO_NO_CHECK 11
+#define SO_PRIORITY 12
 #define SO_LINGER 13
+#define SO_BSDCOMPAT 14
 #define SO_REUSEPORT 15
+#define SO_PASSCRED 16
+#define SO_PEERCRED 17
 #define SO_RCVLOWAT 18
 #define SO_SNDLOWAT 19
+#define SO_SNDBUFFORCE 32
+#define SO_RCVBUFFORCE 33
+#define SO_BINDTODEVICE 25
 #define SO_ACCEPTCONN 30
+#define SO_PEERSEC 31
+#define SO_PASSSEC 34
+#define SO_MARK 36
 #define SO_PROTOCOL 38
 #define SO_DOMAIN 39
+#define SO_RXQ_OVFL 40
+#define SO_PEEK_OFF 42
+#define SO_BUSY_POLL 46
 #define SO_RCVTIMEO 66
 #define SO_SNDTIMEO 67
 
-#define PF_LOCAL 3
+#define PF_LOCAL 1
 #define PF_UNIX PF_LOCAL
 #define PF_FILE PF_LOCAL
 #define AF_LOCAL PF_LOCAL
@@ -127,6 +155,29 @@ struct cmsghdr {
 #error "Unknown WASI version"
 #endif
 
+#ifdef __wasilibc_browseros
+#define SOCK_STREAM 1
+#define SOCK_DGRAM 2
+#define SOCK_RAW 3
+#define SOCK_RDM 4
+#define SOCK_SEQPACKET 5
+
+#define SOCK_NONBLOCK 04000
+#define SOCK_CLOEXEC 02000000
+
+#define SOL_SOCKET 1
+
+#define SO_TYPE 3
+
+#define PF_UNSPEC 0
+#define PF_INET 2
+#define PF_INET6 10
+
+#define AF_UNSPEC PF_UNSPEC
+#define AF_INET PF_INET
+#define AF_INET6 PF_INET6
+#define AF_UNIX PF_LOCAL
+#else
 #define SOCK_DGRAM 5
 #define SOCK_STREAM 6
 
@@ -145,6 +196,7 @@ struct cmsghdr {
 #define AF_INET PF_INET
 #define AF_INET6 PF_INET6
 #define AF_UNIX 3
+#endif
 
 #ifdef __cplusplus
 extern "C" {

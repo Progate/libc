@@ -185,6 +185,23 @@ if (WASI STREQUAL "p1")
     sources/__wasilibc_tell.c
     sources/getentropy.c
     sources/ppoll.c
+    # Linux の値のヘッダーでは組めない（WASI の O_*・AT_* の意味で書かれている）。同じ関数は browseros/paths.c が持つ
+    cloudlibc/src/libc/fcntl/openat.c
+    cloudlibc/src/libc/fcntl/posix_fadvise.c
+    cloudlibc/src/libc/fcntl/posix_fallocate.c
+    cloudlibc/src/libc/stdio/renameat.c
+    cloudlibc/src/libc/sys/stat/futimens.c
+    cloudlibc/src/libc/sys/stat/mkdirat.c
+    cloudlibc/src/libc/sys/stat/utimensat.c
+    cloudlibc/src/libc/unistd/faccessat.c
+    cloudlibc/src/libc/unistd/linkat.c
+    cloudlibc/src/libc/unistd/readlinkat.c
+    cloudlibc/src/libc/unistd/symlinkat.c
+    sources/__wasilibc_rmdirat.c
+    sources/__wasilibc_unlinkat.c
+    # 時計は Linux と同じく番号（clockid_t は int）で、WASI の時計を指す構造体は無い
+    cloudlibc/src/libc/time/CLOCK_MONOTONIC.c
+    cloudlibc/src/libc/time/CLOCK_REALTIME.c
   )
   # ソケットはカーネルの socket(2) などを呼ぶ browseros/socket.c が持つ（accept・recv・send・getsockopt・shutdown を含む）
   list(APPEND bottom_half_sources
