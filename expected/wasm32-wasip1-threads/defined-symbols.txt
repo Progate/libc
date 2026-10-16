@@ -144,7 +144,6 @@ __fwritex
 __fwriting
 __get_locale
 __getdelim
-__getentropy
 __getgr_a
 __getgrent_a
 __getopt_msg
@@ -523,7 +522,6 @@ __wasilibc_nocwd_fstatat
 __wasilibc_nocwd_linkat
 __wasilibc_nocwd_mkdirat_nomode
 __wasilibc_nocwd_openat_nomode
-__wasilibc_nocwd_opendirat
 __wasilibc_nocwd_readlinkat
 __wasilibc_nocwd_renameat
 __wasilibc_nocwd_scandirat
@@ -552,7 +550,6 @@ __xpg_basename
 __xpg_strerror_r
 __year_to_secs
 _environ
-_exit
 _flushlbf
 _initialize
 _pthread_cleanup_pop
@@ -1407,6 +1404,7 @@ rand_r
 random
 read
 readdir
+readdir_r
 readlink
 readlinkat
 readv

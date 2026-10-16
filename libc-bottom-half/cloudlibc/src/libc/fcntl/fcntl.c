@@ -63,27 +63,20 @@ int fcntl(int fildes, int cmd, ...) {
     case F_GETFL: {
 
 #if defined(__wasip1__)
-      // Obtain the flags and the rights of the descriptor.
-      __wasi_fdstat_t fds;
-      __wasi_errno_t error = __wasi_fd_fdstat_get(fildes, &fds);
-      if (error != 0) {
-        errno = error;
-        return -1;
-      }
-
-      // Roughly approximate the access mode by converting the rights.
-      int oflags = fds.fs_flags;
-      if ((fds.fs_rights_base &
-           (__WASI_RIGHTS_FD_READ | __WASI_RIGHTS_FD_READDIR)) != 0) {
-        if ((fds.fs_rights_base & __WASI_RIGHTS_FD_WRITE) != 0)
-          oflags |= O_RDWR;
-        else
-          oflags |= O_RDONLY;
-      } else if ((fds.fs_rights_base & __WASI_RIGHTS_FD_WRITE) != 0) {
-        oflags |= O_WRONLY;
-      } else {
-        oflags |= O_SEARCH;
-      }
+      // BrowserOS: カーネルの fcntl(2) の F_GETFL（Linux の値）を、この libc の O_* に直す
+      long linux = __bos_syscall3(__BOS_SYS_fcntl64, fildes, 3, 0);
+      if (linux < 0)
+        return __browseros_syscall_ret(linux);
+      int accmode = linux & 3;
+      int oflags = accmode == 2 ? O_RDWR : accmode == 1 ? O_WRONLY : (linux & 0200000) ? O_SEARCH : O_RDONLY;
+      if (linux & 02000)
+        oflags |= O_APPEND;
+      if (linux & 04000)
+        oflags |= O_NONBLOCK;
+      if ((linux & 04010000) == 04010000)
+        oflags |= O_SYNC;
+      else if (linux & 010000)
+        oflags |= O_DSYNC;
       return oflags;
 #elif defined(__wasip2__) || defined(__wasip3__)
       if (!entry.vtable->fcntl_getfl) {
@@ -103,13 +96,10 @@ int fcntl(int fildes, int cmd, ...) {
       va_end(ap);
 
 #if defined(__wasip1__)
-      __wasi_fdflags_t fs_flags = flags & 0xfff;
-      __wasi_errno_t error =
-          __wasi_fd_fdstat_set_flags(fildes, fs_flags);
-      if (error != 0) {
-        errno = error;
+      // BrowserOS: カーネルの fcntl(2) の F_SETFL に Linux の値で渡す（変えられるのは O_APPEND と O_NONBLOCK）
+      int linux = (flags & O_APPEND ? 02000 : 0) | (flags & O_NONBLOCK ? 04000 : 0);
+      if (__browseros_syscall_ret(__bos_syscall3(__BOS_SYS_fcntl64, fildes, 4, linux)) < 0)
         return -1;
-      }
 #elif defined(__wasip2__) || defined(__wasip3__)
       if (!entry.vtable->fcntl_setfl) {
         errno = EINVAL;

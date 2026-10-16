@@ -149,6 +149,42 @@ if (WASI STREQUAL "p1")
     sources/posix.c
     sources/truncate.c
     cloudlibc/src/libc/unistd/unlinkat.c
+    # fd の読み書き・ディレクトリの読み出し・時計・終わり方は browseros/io.c が持つ（カーネルの read(2) などを呼ぶ）
+    cloudlibc/src/libc/dirent/closedir.c
+    cloudlibc/src/libc/dirent/dirfd.c
+    cloudlibc/src/libc/dirent/fdclosedir.c
+    cloudlibc/src/libc/dirent/fdopendir.c
+    cloudlibc/src/libc/dirent/opendirat.c
+    cloudlibc/src/libc/dirent/readdir.c
+    cloudlibc/src/libc/dirent/rewinddir.c
+    cloudlibc/src/libc/dirent/scandirat.c
+    cloudlibc/src/libc/dirent/seekdir.c
+    cloudlibc/src/libc/dirent/telldir.c
+    cloudlibc/src/libc/poll/poll.c
+    cloudlibc/src/libc/sched/sched_yield.c
+    cloudlibc/src/libc/stdlib/_Exit.c
+    cloudlibc/src/libc/sys/time/gettimeofday.c
+    cloudlibc/src/libc/sys/uio/preadv.c
+    cloudlibc/src/libc/sys/uio/pwritev.c
+    cloudlibc/src/libc/sys/uio/readv.c
+    cloudlibc/src/libc/sys/uio/writev.c
+    cloudlibc/src/libc/time/clock_getres.c
+    cloudlibc/src/libc/time/clock_gettime.c
+    cloudlibc/src/libc/time/clock_nanosleep.c
+    cloudlibc/src/libc/time/nanosleep.c
+    cloudlibc/src/libc/time/time.c
+    cloudlibc/src/libc/unistd/fdatasync.c
+    cloudlibc/src/libc/unistd/fsync.c
+    cloudlibc/src/libc/unistd/ftruncate.c
+    cloudlibc/src/libc/unistd/lseek.c
+    cloudlibc/src/libc/unistd/pread.c
+    cloudlibc/src/libc/unistd/pwrite.c
+    cloudlibc/src/libc/unistd/read.c
+    cloudlibc/src/libc/unistd/write.c
+    sources/__wasilibc_fd_renumber.c
+    sources/__wasilibc_tell.c
+    sources/getentropy.c
+    sources/ppoll.c
   )
   # ソケットはカーネルの socket(2) などを呼ぶ browseros/socket.c が持つ（accept・recv・send・getsockopt・shutdown を含む）
   list(APPEND bottom_half_sources
@@ -158,6 +194,7 @@ if (WASI STREQUAL "p1")
     sources/browseros/exec.c
     sources/browseros/flock.c
     sources/browseros/interfaces.c
+    sources/browseros/io.c
     sources/browseros/itimer.c
     sources/browseros/linux.c
     sources/browseros/loadavg.c
