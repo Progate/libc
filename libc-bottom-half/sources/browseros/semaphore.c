@@ -15,6 +15,7 @@
 
 #define _GNU_SOURCE
 #include <browseros/host.h>
+#include <browseros/linux.h>
 #include <browseros/libc.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -28,6 +29,56 @@
 #include <time.h>
 
 #include "browseros_sem.h"
+
+// カーネルの名前つきセマフォ（この OS が足した syscall。→ browser-os の src/wasi/semaphores.ts）。Linux の名前つきセマフォ
+// は libc が /dev/shm の共有メモリと futex(2) で作るが、この OS のプロセスどうしは線形メモリを共有しないので、表は
+// カーネルが持つ。戻り値はこの libc の errno（0 は成功）
+#define SYS_browseros_sem_open 1029
+#define SYS_browseros_sem_close 1030
+#define SYS_browseros_sem_unlink 1031
+#define SYS_browseros_sem_wait 1032
+#define SYS_browseros_sem_trywait 1033
+#define SYS_browseros_sem_post 1034
+#define SYS_browseros_sem_getvalue 1035
+
+static int32_t errno_of(long r) { return r < 0 ? (int32_t)-r : 0; }
+
+/// `flags` はカーネルの口のビット（1 が作る、2 が既にあれば失敗）。Linux の O_CREAT・O_EXCL にして渡す
+static int32_t ksem_open(const char *name, uint32_t len, int32_t flags, uint32_t value, uint32_t *handle, uint32_t *id) {
+  (void)len;
+  uint32_t out[2] = {0, 0};
+  long r = __bos_syscall4(SYS_browseros_sem_open, __bos_ptr(name), (flags & 1 ? 0100 : 0) | (flags & 2 ? 0200 : 0), value,
+                          __bos_ptr(out));
+  *handle = out[0];
+  *id = out[1];
+  return errno_of(r);
+}
+
+static int32_t ksem_close(uint32_t handle) { return errno_of(__bos_syscall1(SYS_browseros_sem_close, handle)); }
+
+static int32_t ksem_unlink(const char *name, uint32_t len) {
+  (void)len;
+  return errno_of(__bos_syscall1(SYS_browseros_sem_unlink, __bos_ptr(name)));
+}
+
+/// `deadline` は CLOCK_REALTIME のナノ秒。負なら待ち続ける
+static int32_t ksem_timedwait(uint32_t handle, int64_t deadline) {
+  struct {
+    int64_t tv_sec, tv_nsec;
+  } at = {deadline / 1000000000, deadline % 1000000000};
+  return errno_of(__bos_syscall2(SYS_browseros_sem_wait, handle, deadline < 0 ? 0 : __bos_ptr(&at)));
+}
+
+static int32_t ksem_trywait(uint32_t handle) { return errno_of(__bos_syscall1(SYS_browseros_sem_trywait, handle)); }
+
+static int32_t ksem_post(uint32_t handle) { return errno_of(__bos_syscall1(SYS_browseros_sem_post, handle)); }
+
+static int32_t ksem_getvalue(uint32_t handle, int *value) {
+  long r = __bos_syscall1(SYS_browseros_sem_getvalue, handle);
+  if (r >= 0)
+    *value = (int)r;
+  return errno_of(r);
+}
 
 /// このプロセスが開いている名前つきセマフォ（同じものを開き直したら同じ sem_t * を返すための表）
 struct named {
@@ -78,7 +129,7 @@ sem_t *sem_open(const char *name, int flags, ...) {
   uint32_t handle = 0, id = 0;
   // カーネルの口は O_CREAT・O_EXCL を自分のビット（1 と 2）で受け取る（libc の O_* の値に寄らない）
   int32_t kernel_flags = ((flags & O_CREAT) ? 1 : 0) | ((flags & O_CREAT) && (flags & O_EXCL) ? 2 : 0);
-  int32_t error = __browseros_ksem_open(name, len, kernel_flags, value, &handle, &id);
+  int32_t error = ksem_open(name, len, kernel_flags, value, &handle, &id);
   if (error != 0) {
     errno = error;
     return SEM_FAILED;
@@ -91,7 +142,7 @@ sem_t *sem_open(const char *name, int flags, ...) {
       sem_t *sem = opened[i].sem;
       pthread_mutex_unlock(&opened_lock);
       // 開き直した handle は要らない（このプロセスはすでに 1 つ持っている）
-      __browseros_ksem_close(handle);
+      ksem_close(handle);
       return sem;
     }
   }
@@ -109,7 +160,7 @@ sem_t *sem_open(const char *name, int flags, ...) {
   }
   if (!sem) {
     pthread_mutex_unlock(&opened_lock);
-    __browseros_ksem_close(handle);
+    ksem_close(handle);
     errno = ENOMEM;
     return SEM_FAILED;
   }
@@ -132,7 +183,7 @@ int sem_close(sem_t *sem) {
     }
     opened[i] = opened[--opened_len];
     pthread_mutex_unlock(&opened_lock);
-    __browseros_ksem_close((uint32_t)sem->__val[3]);
+    ksem_close((uint32_t)sem->__val[3]);
     free(sem);
     return 0;
   }
@@ -145,7 +196,7 @@ int sem_unlink(const char *name) {
   size_t len;
   if (!(name = name_of(name, &len)))
     return -1;
-  int32_t error = __browseros_ksem_unlink(name, len);
+  int32_t error = ksem_unlink(name, len);
   if (error != 0) {
     errno = error;
     return -1;
@@ -164,7 +215,7 @@ int __browseros_sem_timedwait(sem_t *sem, const struct timespec *at) {
     // 過ぎた時刻は 0 にする（カーネルは負の値を「期限なし」と読む）
     deadline = at->tv_sec < 0 ? 0 : (int64_t)at->tv_sec * 1000000000LL + at->tv_nsec;
   }
-  int32_t error = __browseros_ksem_timedwait((uint32_t)sem->__val[3], deadline);
+  int32_t error = ksem_timedwait((uint32_t)sem->__val[3], deadline);
   if (error != 0) {
     errno = error;
     return -1;
@@ -174,7 +225,7 @@ int __browseros_sem_timedwait(sem_t *sem, const struct timespec *at) {
 }
 
 int __browseros_sem_trywait(sem_t *sem) {
-  int32_t error = __browseros_ksem_trywait((uint32_t)sem->__val[3]);
+  int32_t error = ksem_trywait((uint32_t)sem->__val[3]);
   if (error != 0) {
     errno = error;
     return -1;
@@ -185,7 +236,7 @@ int __browseros_sem_trywait(sem_t *sem) {
 
 int __browseros_sem_post(sem_t *sem) {
   __browseros_memory_sync();
-  int32_t error = __browseros_ksem_post((uint32_t)sem->__val[3]);
+  int32_t error = ksem_post((uint32_t)sem->__val[3]);
   if (error != 0) {
     errno = error;
     return -1;
@@ -194,7 +245,7 @@ int __browseros_sem_post(sem_t *sem) {
 }
 
 int __browseros_sem_getvalue(sem_t *sem, int *valp) {
-  int32_t error = __browseros_ksem_getvalue((uint32_t)sem->__val[3], valp);
+  int32_t error = ksem_getvalue((uint32_t)sem->__val[3], valp);
   if (error != 0) {
     errno = error;
     return -1;

@@ -1,11 +1,4 @@
 __addtf3
-__browseros_ksem_close
-__browseros_ksem_getvalue
-__browseros_ksem_open
-__browseros_ksem_post
-__browseros_ksem_timedwait
-__browseros_ksem_trywait
-__browseros_ksem_unlink
 __browseros_linux_syscall
 __data_end
 __divtf3
