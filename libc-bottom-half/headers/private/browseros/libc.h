@@ -8,12 +8,6 @@
 /// open(2) / mkdir(2) が新しく作るものに付ける権限（`mode & ~umask`）。→ process.c
 mode_t __browseros_creation_mode(mode_t mode);
 
-/// preopen からの相対パスを `mode & ~umask` の権限で開く・作る（open(2) の mode を活かす）。→ create.c
-int __browseros_nocwd_openat(int dirfd, const char *path, int oflag, mode_t mode);
-
-/// preopen からの相対パスに `mode & ~umask` の権限でディレクトリを作る。→ create.c
-int __browseros_nocwd_mkdirat(int dirfd, const char *path, mode_t mode);
-
 /// このスレッドでハンドラを走らせた回数。ppoll・sigsuspend が「待つあいだに配られたか」を見る。→ signal.c
 unsigned __browseros_handled_count(void);
 

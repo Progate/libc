@@ -140,13 +140,21 @@ set(bottom_half_sources
 )
 
 if (WASI STREQUAL "p1")
+  # パスの関数は browseros/paths.c が持つ（作業ディレクトリはカーネルが持ち、パスはカーネルの *at(2) へそのまま渡す）。
+  # preopen と libc の作業ディレクトリでパスを直す wasi-libc の版は入れない
+  list(REMOVE_ITEM bottom_half_sources
+    sources/at_fdcwd.c
+    sources/chdir.c
+    sources/getcwd.c
+    sources/posix.c
+    sources/truncate.c
+    cloudlibc/src/libc/unistd/unlinkat.c
+  )
   # ソケットはカーネルのソケット表を使う browseros/socket.c が持つ（accept・recv・send・getsockopt を含む）
   list(APPEND bottom_half_sources
     cloudlibc/src/libc/sys/socket/shutdown.c
     sources/browseros/atfork.c
     sources/browseros/clocks.c
-    sources/browseros/create.c
-    sources/browseros/directory.c
     sources/browseros/dl_iterate_phdr.c
     sources/browseros/exec.c
     sources/browseros/flock.c
@@ -156,6 +164,7 @@ if (WASI STREQUAL "p1")
     sources/browseros/loadavg.c
     sources/browseros/memory_sync.c
     sources/browseros/netdb.c
+    sources/browseros/paths.c
     sources/browseros/popen.c
     sources/browseros/process.c
     sources/browseros/pty.c

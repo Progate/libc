@@ -38,14 +38,27 @@ long __browseros_syscall_ret(long r);
 #define __bos_ptr(p) ((int64_t)(uintptr_t)(p))
 
 // syscall の番号（riscv32 の Linux。musl の arch/riscv32/bits/syscall.h.in と同じ）
+#define __BOS_SYS_getcwd 17
 #define __BOS_SYS_dup 23
 #define __BOS_SYS_dup3 24
 #define __BOS_SYS_fcntl64 25
 #define __BOS_SYS_ioctl 29
 #define __BOS_SYS_flock 32
+#define __BOS_SYS_mkdirat 34
+#define __BOS_SYS_unlinkat 35
+#define __BOS_SYS_symlinkat 36
+#define __BOS_SYS_linkat 37
+#define __BOS_SYS_truncate64 45
+#define __BOS_SYS_faccessat 48
+#define __BOS_SYS_chdir 49
+#define __BOS_SYS_fchdir 50
 #define __BOS_SYS_fchmod 52
 #define __BOS_SYS_fchmodat 53
+#define __BOS_SYS_fchownat 54
+#define __BOS_SYS_fchown 55
+#define __BOS_SYS_openat 56
 #define __BOS_SYS_pipe2 59
+#define __BOS_SYS_readlinkat 78
 #define __BOS_SYS_waitid 95
 #define __BOS_SYS_kill 129
 #define __BOS_SYS_tkill 130
@@ -68,8 +81,11 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_getegid 177
 #define __BOS_SYS_gettid 178
 #define __BOS_SYS_umask 166
+#define __BOS_SYS_renameat2 276
 #define __BOS_SYS_statx 291
+#define __BOS_SYS_utimensat_time64 412
 #define __BOS_SYS_rt_sigtimedwait_time64 421
+#define __BOS_SYS_faccessat2 439
 
 // この OS が足した syscall（Linux が使わない 1024 から。→ browser-os の src/wasi/linux/）
 /// 配るシグナルを 1 つ受け取る（Linux ではカーネルがハンドラのフレームを積むところ。→ signal.c）

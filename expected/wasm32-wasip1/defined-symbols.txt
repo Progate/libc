@@ -22,8 +22,6 @@ __browseros_handled_count
 __browseros_memory_sync
 __browseros_memory_sync_fd
 __browseros_name_of_address
-__browseros_nocwd_mkdirat
-__browseros_nocwd_openat
 __browseros_pack_strings
 __browseros_run_atfork
 __browseros_sem_getvalue
@@ -492,7 +490,6 @@ __wasi_sock_recv
 __wasi_sock_send
 __wasi_sock_shutdown
 __wasilibc_access
-__wasilibc_cwd
 __wasilibc_deinitialize_environ
 __wasilibc_dttoif
 __wasilibc_ensure_environ
@@ -500,7 +497,6 @@ __wasilibc_environ
 __wasilibc_fd_renumber
 __wasilibc_find_abspath
 __wasilibc_find_relpath
-__wasilibc_find_relpath_alloc
 __wasilibc_futex_wait
 __wasilibc_futex_wake
 __wasilibc_get_environ

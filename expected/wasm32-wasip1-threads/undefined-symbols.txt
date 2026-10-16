@@ -1,6 +1,5 @@
 __addtf3
 __browseros_execve
-__browseros_fchdir
 __browseros_fork
 __browseros_getitimer
 __browseros_ksem_close
