@@ -2,6 +2,7 @@
 #include <stdatomic.h>
 #endif
 
+#include <features.h>
 #include <wasi/api.h>
 #include <wasi/descriptor_table.h>
 
@@ -61,7 +62,13 @@ __attribute__((export_name("wasi:cli/run@0.3.0#run"))) int _start(void)
   // `__wasi_proc_exit`.
 #if defined(__wasip1__)
   if (r != 0) {
+#ifdef __wasilibc_browseros
+    // BrowserOS: 終わり方は libc の _Exit（カーネルの exit_group(2)）に揃える
+    extern _Noreturn void _Exit(int);
+    _Exit(r);
+#else
     __wasi_proc_exit(r);
+#endif
   }
 #elif defined(__wasip2__) || defined(__wasip3__)
   __wasilibc_assert_no_descriptor_leaks();

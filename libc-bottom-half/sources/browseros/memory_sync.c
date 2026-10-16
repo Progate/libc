@@ -12,6 +12,7 @@
 // 入らず、MAP_SHARED のファイルの写しを持たないプロセスでは数を 1 つ見るだけで戻る。
 
 #include <browseros/libc.h>
+#include <sys/stat.h>
 #include <wasi/api.h>
 
 extern volatile int __browseros_shared_map_count __attribute__((__weak__));
@@ -27,9 +28,8 @@ void __browseros_memory_sync_fd(int fd) {
     return;
   // 普通のファイルとディレクトリの読み書きは、ほかのプロセスと話す口ではない（pip が wheel を読むたびに大きな写しを
   // 読み直さない）。パイプ・ソケット・端末は同期する
-  __wasi_fdstat_t stat;
-  if (__wasi_fd_fdstat_get(fd, &stat) == 0 &&
-      (stat.fs_filetype == __WASI_FILETYPE_REGULAR_FILE || stat.fs_filetype == __WASI_FILETYPE_DIRECTORY))
+  struct stat st;
+  if (fstat(fd, &st) == 0 && (S_ISREG(st.st_mode) || S_ISDIR(st.st_mode)))
     return;
   __browseros_memory_sync();
 }
