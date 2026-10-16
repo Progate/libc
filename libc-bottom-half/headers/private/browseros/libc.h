@@ -24,10 +24,6 @@ void __browseros_socket_forget(int fd) __attribute__((__weak__));
 /// fd の複製に、ソケットとして覚えていたことを写す。→ socket.c
 void __browseros_socket_copy(int from, int to) __attribute__((__weak__));
 
-/// argv / envp を NUL 区切りのバイト列にする（カーネルの posix_spawnp と execve の渡し方）。`len` に長さを書く。
-/// 返したものは free する。足りなければ NULL。→ spawn.c
-char *__browseros_pack_strings(char *const strings[], size_t *len);
-
 /// プロセスをまたぐ MAP_SHARED の写しを同期する（POSIX がメモリを同期すると定める関数で呼ぶ）。写しを持たない
 /// プロセスでは何もしない。→ memory_sync.c
 void __browseros_memory_sync(void);

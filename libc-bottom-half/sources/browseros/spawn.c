@@ -1,12 +1,13 @@
 // posix_spawn(3) / posix_spawnp(3) と file actions。
 //
-// 子を起こすのはカーネルの posix_spawnp（browser_os_process.posix_spawnp）である。file actions と attr はバイト列にして渡し、カーネルが子の fd 表に順に当てる（子の fd は親の fd と同じ
-// 開いたファイルの記述を指す）。並べ方は browser-os の process/wasi-spawn.ts と README「本物と同じ形で起こす」にある。
+// 子を起こすのはカーネルの browseros_posix_spawn（この OS が足した syscall。wasm は自分を写せないので Linux の
+// clone(2) + execve(2) の形にできず、macOS の XNU が syscall として持つ posix_spawn を前例にする）である。file actions と
+// attr はバイト列にして渡し、カーネルが子の fd 表に順に当てる（子の fd は親の fd と同じ開いたファイルの記述を指す）。
+// 並べ方は browser-os の process/wasi-spawn.ts と README「本物と同じ形で起こす」にある。argv・envp は `char *` の並びの
+// まま渡す。
 //
-// libc が持つものはカーネルが知らないので、ここで足す。
-//
-// - 作業ディレクトリ: cwd の持ち主は libc なので、先頭に addchdir(getcwd()) を置く（相対パスの addopen・addchdir と
-//   起こすもののパスは、そこから引かれる）
+// - 作業ディレクトリ: カーネルが持つ。子は親のいまの作業ディレクトリで始まり、相対パスの addopen・addchdir と起こす
+//   もののパスはそこから引かれる
 // - PATH: posix_spawnp は呼んだプロセスのいまの PATH を引いて、`/` のあるパスで 1 つずつ試す（musl・execvp(3) と同じ）
 // - umask: addopen が作るファイルの権限は `mode & ~umask` にして渡す
 //
@@ -15,6 +16,7 @@
 
 #define _GNU_SOURCE
 #include <browseros/host.h>
+#include <browseros/linux.h>
 #include <browseros/libc.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -206,23 +208,6 @@ int posix_spawnattr_getschedpolicy(const posix_spawnattr_t *restrict attr, int *
   return 0;
 }
 
-char *__browseros_pack_strings(char *const strings[], size_t *len) {
-  size_t total = 0;
-  for (size_t i = 0; strings && strings[i]; i++)
-    total += strlen(strings[i]) + 1;
-  char *out = malloc(total ? total : 1);
-  if (!out)
-    return 0;
-  size_t at = 0;
-  for (size_t i = 0; strings && strings[i]; i++) {
-    size_t n = strlen(strings[i]) + 1;
-    memcpy(out + at, strings[i], n);
-    at += n;
-  }
-  *len = total;
-  return out;
-}
-
 /// file actions のバイト列を伸ばしながら書く先
 struct buffer {
   unsigned char *data;
@@ -262,9 +247,8 @@ static void put_action(struct buffer *out, uint32_t op, int32_t fd, int32_t newf
   }
 }
 
-/// file actions をバイト列にする。先頭に addchdir(cwd) を置き、子の作業ディレクトリを libc の cwd から始める
-static int encode_actions(const posix_spawn_file_actions_t *fa, const char *cwd, struct buffer *out) {
-  put_action(out, __BROWSEROS_SPAWN_CHDIR, -1, -1, 0, 0, cwd);
+/// file actions をバイト列にする（子の作業ディレクトリは、カーネルが持っている親の作業ディレクトリから始まる）
+static int encode_actions(const posix_spawn_file_actions_t *fa, struct buffer *out) {
   struct fdop *op = fa ? fa->__actions : 0;
   // 最後の 1 つを指しているので、最初の 1 つへ戻ってから順に書く
   while (op && op->prev)
@@ -310,15 +294,27 @@ struct encoded_attr {
   int32_t pgroup, pad2;
 };
 
+/// カーネルの browseros_posix_spawn への頼み（→ browser-os の src/wasi/linux/process.ts）
+struct spawn_request {
+  uint32_t path, actions, actions_len, attr, attr_len, argv, envp;
+};
+
 /// 1 つのパスで起こす。file actions と attr はもうバイト列になっている
-static int spawn_path(pid_t *pid, const char *path, const struct buffer *actions,
-                      const struct encoded_attr *attr, const char *argv, size_t argv_len,
-                      const char *env, size_t env_len) {
+static int spawn_path(pid_t *pid, const char *path, const struct buffer *actions, const struct encoded_attr *attr,
+                      char *const argv[], char *const envp[]) {
   int32_t child = 0;
-  int error = __browseros_posix_spawnp(&child, path, strlen(path), actions->data, actions->len, attr,
-                                       sizeof *attr, argv, argv_len, env, env_len);
-  if (error)
-    return error;
+  struct spawn_request request = {
+      .path = (uintptr_t)path,
+      .actions = (uintptr_t)actions->data,
+      .actions_len = actions->len,
+      .attr = (uintptr_t)attr,
+      .attr_len = sizeof *attr,
+      .argv = (uintptr_t)argv,
+      .envp = (uintptr_t)envp,
+  };
+  long r = __bos_syscall2(__BOS_SYS_browseros_posix_spawn, __bos_ptr(&child), __bos_ptr(&request));
+  if (r < 0)
+    return -r;
   if (pid)
     *pid = child;
   return 0;
@@ -329,8 +325,8 @@ static int spawn_path(pid_t *pid, const char *path, const struct buffer *actions
  * posix_spawn に渡された相対の名前）なら `./` を付けて、子の作業ディレクトリからの相対パスにする
  */
 static int spawn_in(pid_t *pid, const char *dir, size_t dir_len, const char *file,
-                    const struct buffer *actions, const struct encoded_attr *attr, const char *argv,
-                    size_t argv_len, const char *env, size_t env_len) {
+                    const struct buffer *actions, const struct encoded_attr *attr, char *const argv[],
+                    char *const envp[]) {
   size_t file_len = strlen(file);
   char *path = malloc(dir_len + file_len + 3);
   if (!path)
@@ -343,7 +339,7 @@ static int spawn_in(pid_t *pid, const char *dir, size_t dir_len, const char *fil
     memcpy(path, "./", 2);
     memcpy(path + 2, file, file_len + 1);
   }
-  int error = spawn_path(pid, path, actions, attr, argv, argv_len, env, env_len);
+  int error = spawn_path(pid, path, actions, attr, argv, envp);
   free(path);
   return error;
 }
@@ -360,12 +356,8 @@ static int spawn(pid_t *restrict pid, const char *restrict file,
     return ENOENT;
   if (strnlen(file, PATH_MAX) >= PATH_MAX)
     return ENAMETOOLONG;
-  char *cwd = getcwd(0, 0);
-  if (!cwd)
-    return errno;
   struct buffer actions = {0};
-  int error = encode_actions(fa, cwd, &actions);
-  free(cwd);
+  int error = encode_actions(fa, &actions);
   // 子へ継ぐシグナルの扱いはカーネルが親の扱い（カーネルが持っている）と attr から決める
   struct encoded_attr encoded = {0};
   if (attr) {
@@ -374,19 +366,15 @@ static int spawn(pid_t *restrict pid, const char *restrict file,
     encoded.sigmask = mask_of_set(&attr->__mask);
     encoded.pgroup = attr->__pgrp;
   }
-  size_t argv_len = 0, env_len = 0;
-  char *packed_argv = error ? 0 : __browseros_pack_strings(argv, &argv_len);
-  char *packed_env = error ? 0 : __browseros_pack_strings(envp ? envp : environ, &env_len);
-  if (!error && (!packed_argv || !packed_env))
-    error = ENOMEM;
+  char *const *env = envp ? envp : environ;
 
   if (error) {
     // 組み立てに失敗した。何も起こさない
   } else if (strchr(file, '/')) {
-    error = spawn_path(pid, file, &actions, &encoded, packed_argv, argv_len, packed_env, env_len);
+    error = spawn_path(pid, file, &actions, &encoded, argv, env);
   } else if (!search) {
     // posix_spawn の `path` は PATH を引かない。`/` の無い名前も作業ディレクトリからの相対パスである
-    error = spawn_in(pid, "", 0, file, &actions, &encoded, packed_argv, argv_len, packed_env, env_len);
+    error = spawn_in(pid, "", 0, file, &actions, &encoded, argv, env);
   } else {
     const char *path = getenv("PATH");
     if (!path)
@@ -395,8 +383,7 @@ static int spawn(pid_t *restrict pid, const char *restrict file,
     error = ENOENT;
     for (const char *p = path;; p++) {
       const char *z = strchrnul(p, ':');
-      int tried = spawn_in(pid, p, z - p, file, &actions, &encoded, packed_argv, argv_len,
-                           packed_env, env_len);
+      int tried = spawn_in(pid, p, z - p, file, &actions, &encoded, argv, env);
       if (tried == EACCES) {
         seen_eacces = 1;
       } else if (tried != ENOENT && tried != ENOTDIR) {
@@ -410,8 +397,6 @@ static int spawn(pid_t *restrict pid, const char *restrict file,
     if (error == ENOENT && seen_eacces)
       error = EACCES;
   }
-  free(packed_argv);
-  free(packed_env);
   free(actions.data);
   return error;
 }

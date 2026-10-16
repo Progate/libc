@@ -1,6 +1,6 @@
 // インターバルタイマー（setitimer(2)・getitimer(2)）と、その上の alarm(2)・ualarm(3)・pause(2)。
 //
-// タイマーの持ち主はカーネルである（browser_os_process.setitimer / getitimer）。期限が来るとカーネルがこのプロセスへ
+// タイマーの持ち主はカーネルである（setitimer(2)・getitimer(2)）。期限が来るとカーネルがこのプロセスへ
 // SIGALRM を送るので、poll・パイプの read・nanosleep で止まっていても、ハンドラを置いていればその syscall が EINTR で
 // 起きて戻るところでハンドラが走り、置いていなければ既定の動作で終わる（→ signal.c）。Linux と同じく、タイマーは
 // プロセスに 1 つで、execve をまたいで残り、posix_spawn・fork の子には継がれない。
@@ -8,65 +8,52 @@
 // 持つのは ITIMER_REAL（実時間）だけである。ITIMER_VIRTUAL・ITIMER_PROF（CPU 時間で数え、SIGVTALRM・SIGPROF を送る）は、
 // wasm を syscall の境目でしか止められず、使った CPU 時間がその値に達したところで送れないので、カーネルが EINVAL で断る。
 
-#include <browseros/host.h>
+#include <browseros/linux.h>
 #include <errno.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdint.h>
 #include <sys/time.h>
 #include <unistd.h>
 
-/// カーネルへ渡せるマイクロ秒の上限（2^53 - 1。カーネルは JavaScript の数で持つ）
-#define MAX_MICROSECONDS ((uint64_t)9007199254740991ULL)
+/// カーネルの struct __kernel_old_itimerval（riscv32 の Linux。long の秒とマイクロ秒。間隔が先）
+struct kernel_itimerval {
+  int32_t interval_sec, interval_usec, value_sec, value_usec;
+};
 
-/// timeval をマイクロ秒にする。範囲の外（負・tv_usec が 1 秒以上）なら -1。大きすぎる値は上限に丸める
-static int to_microseconds(const struct timeval *value, uint64_t *out) {
-  if (value->tv_sec < 0 || value->tv_usec < 0 || value->tv_usec >= 1000000)
-    return -1;
-  if ((uint64_t)value->tv_sec > (MAX_MICROSECONDS - (uint64_t)value->tv_usec) / 1000000)
-    *out = MAX_MICROSECONDS;
-  else
-    *out = (uint64_t)value->tv_sec * 1000000 + (uint64_t)value->tv_usec;
-  return 0;
-}
+/// 秒を long に収める（収まらない値は Linux の 32 ビットと同じく上限に丸める）
+static int32_t clamp_seconds(time_t seconds) { return seconds > INT32_MAX ? INT32_MAX : (int32_t)seconds; }
 
-static struct timeval to_timeval(uint64_t microseconds) {
-  struct timeval value = {.tv_sec = (time_t)(microseconds / 1000000),
-                          .tv_usec = (suseconds_t)(microseconds % 1000000)};
-  return value;
-}
-
-static void to_itimerval(const uint64_t values[2], struct itimerval *out) {
-  out->it_value = to_timeval(values[0]);
-  out->it_interval = to_timeval(values[1]);
+static void from_kernel(const struct kernel_itimerval *raw, struct itimerval *out) {
+  out->it_interval.tv_sec = raw->interval_sec;
+  out->it_interval.tv_usec = raw->interval_usec;
+  out->it_value.tv_sec = raw->value_sec;
+  out->it_value.tv_usec = raw->value_usec;
 }
 
 int getitimer(int which, struct itimerval *value) {
-  uint64_t current[2];
-  int32_t error = __browseros_getitimer(which, current);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
-  to_itimerval(current, value);
+  struct kernel_itimerval raw;
+  long r = __bos_syscall2(__BOS_SYS_getitimer, which, __bos_ptr(&raw));
+  if (r < 0)
+    return __browseros_syscall_ret(r);
+  from_kernel(&raw, value);
   return 0;
 }
 
 int setitimer(int which, const struct itimerval *restrict value, struct itimerval *restrict old) {
   // NULL は止めるのと同じに扱う（Linux と同じ）
-  uint64_t next = 0, interval = 0;
-  if (value && (to_microseconds(&value->it_value, &next) != 0 ||
-                to_microseconds(&value->it_interval, &interval) != 0)) {
-    errno = EINVAL;
-    return -1;
+  struct kernel_itimerval next = {0}, previous = {0};
+  if (value) {
+    next.interval_sec = clamp_seconds(value->it_interval.tv_sec);
+    next.interval_usec = value->it_interval.tv_usec;
+    next.value_sec = clamp_seconds(value->it_value.tv_sec);
+    next.value_usec = value->it_value.tv_usec;
   }
-  uint64_t previous[2] = {0, 0};
-  int32_t error = __browseros_setitimer(which, next, interval, previous);
-  if (error != 0) {
-    errno = error;
-    return -1;
-  }
+  long r = __bos_syscall3(__BOS_SYS_setitimer, which, __bos_ptr(&next), __bos_ptr(&previous));
+  if (r < 0)
+    return __browseros_syscall_ret(r);
   if (old)
-    to_itimerval(previous, old);
+    from_kernel(&previous, old);
   return 0;
 }
 

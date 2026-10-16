@@ -1,23 +1,16 @@
 // execve(2) と exec(3) の仲間（execv・execvp・execvpe・execl・execle・execlp・fexecve）。
 //
-// 実行ファイルを入れ替えるのはカーネルの execve（browser_os_process.execve）である。同じ pid のまま、fd・
-// プロセスグループ・親・子・無視しているシグナル・塞いでいるシグナル・保留・インターバルタイマーを新しいプログラムへ
-// 渡し、ハンドラを置いていたシグナルは既定の動作に戻す。fd は close-on-exec（FD_CLOEXEC。O_CLOEXEC・SOCK_CLOEXEC・
-// F_SETFD で立てる）の立ったものだけを閉じる。通ればカーネルが呼び出しの積み重なりごと捨てるので、ここへは戻らない。
-// 入れ替えられなければ execve(2) と同じ errno（ENOENT・ENOTDIR・EACCES・ENOEXEC・ELOOP）を返し、fd を閉じずに
-// 元のプログラムが続く。
+// 実行ファイルを入れ替えるのはカーネルの execve(2) である。同じ pid のまま、fd・プロセスグループ・親・子・作業ディレクトリ・
+// umask・無視しているシグナル・塞いでいるシグナル・保留・インターバルタイマーを新しいプログラムへ渡し、ハンドラを置いて
+// いたシグナルは既定の動作に戻す。fd は close-on-exec（FD_CLOEXEC。O_CLOEXEC・SOCK_CLOEXEC・F_SETFD で立てる）の立った
+// ものだけを閉じる。通ればカーネルが呼び出しの積み重なりごと捨てるので、ここへは戻らない。入れ替えられなければ
+// execve(2) と同じ errno（ENOENT・ENOTDIR・EACCES・ENOEXEC・ELOOP）を返し、fd を閉じずに元のプログラムが続く。
 //
-// libc が持ち、カーネルが知らないものはここで渡す（posix_spawn と同じ。→ spawn.c）。
-//
-// - 作業ディレクトリ: cwd の持ち主は libc なので、getcwd() を渡す（相対パスの実行ファイルはそこから引かれる）
-// - シグナル: 無視しているものと塞いでいるものはカーネルが持っていて、新しいプログラムへ残す
-// - PATH: execvp・execvpe・execlp は呼んだプロセスの PATH を引いて、`/` のあるパスで 1 つずつ試す（musl と同じ）
-//
-// カーネルの execve は `/` の無い名前を PATH から探すので、execve(2) に `/` の無い名前が来たら `./` を付けて、
-// 作業ディレクトリからの相対パスにする（execve は PATH を引かない）。
+// execvp・execvpe・execlp は呼んだプロセスの PATH を引いて、`/` のあるパスで 1 つずつ試す（musl と同じ）。
 
 #define _GNU_SOURCE
 #include <browseros/host.h>
+#include <browseros/linux.h>
 #include <browseros/libc.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -47,36 +40,12 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
   if (!envp)
     envp = empty_envp;
 
-  char *cwd = getcwd(0, 0);
-  if (!cwd)
-    return -1;
-  size_t argv_len = 0, env_len = 0;
-  char *packed_argv = __browseros_pack_strings(argv, &argv_len);
-  char *packed_env = __browseros_pack_strings(envp, &env_len);
-  int bare = !strchr(path, '/');
-  char *relative = 0;
-  const char *file = path;
-  if (bare) {
-    size_t len = strlen(path);
-    relative = malloc(len + 3);
-    if (relative) {
-      memcpy(relative, "./", 2);
-      memcpy(relative + 2, path, len + 1);
-      file = relative;
-    }
-  }
-  int error = ENOMEM;
-  if (packed_argv && packed_env && (!bare || relative)) {
-    // 入れ替わると写しは消えるので、MAP_SHARED の写しに書いたものを先にファイルへ出す（→ memory_sync.c）
-    __browseros_memory_sync();
-    error = __browseros_execve(file, strlen(file), packed_argv, argv_len, packed_env, env_len, cwd,
-                               strlen(cwd));
-  }
-  // ここへ来たのは入れ替えられなかったとき
-  free(relative);
-  free(packed_argv);
-  free(packed_env);
-  free(cwd);
+  // 入れ替わると写しは消えるので、MAP_SHARED の写しに書いたものを先にファイルへ出す（→ memory_sync.c）
+  __browseros_memory_sync();
+  // 通ればカーネルが呼び出しの積み重なりごと捨てるので、ここへは戻らない。`/` の無い名前はカーネルが作業ディレクトリ
+  // からの相対パスにする（execve(2) は PATH を引かない）
+  long r = __bos_syscall3(__BOS_SYS_execve, __bos_ptr(path), __bos_ptr(argv), __bos_ptr(envp));
+  int error = (int)-r;
   errno = error ? error : ENOEXEC;
   return -1;
 }

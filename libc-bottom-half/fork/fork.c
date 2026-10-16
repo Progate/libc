@@ -13,6 +13,7 @@
 // 控え（ローカル変数は asyncify が写す）、子で戻ったところで書き戻す。
 
 #include <browseros/host.h>
+#include <browseros/linux.h>
 #include <browseros/libc.h>
 #include <errno.h>
 #include <stdint.h>
@@ -53,10 +54,10 @@ pid_t fork(void) {
   data.current = data.stack;
   data.end = data.stack + sizeof(data.stack);
   int32_t pid = 0;
-  int32_t error = __browseros_fork(&data, &pid);
-  if (error != 0) {
+  long r = __bos_syscall2(__BOS_SYS_browseros_fork, __bos_ptr(&data), __bos_ptr(&pid));
+  if (r < 0) {
     __browseros_run_atfork(1);
-    errno = error;
+    errno = (int)-r;
     return -1;
   }
   if (pid == 0) {
