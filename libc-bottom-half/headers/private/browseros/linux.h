@@ -43,6 +43,7 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_fcntl64 25
 #define __BOS_SYS_ioctl 29
 #define __BOS_SYS_flock 32
+#define __BOS_SYS_mknodat 33
 #define __BOS_SYS_mkdirat 34
 #define __BOS_SYS_unlinkat 35
 #define __BOS_SYS_symlinkat 36
@@ -69,6 +70,7 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_rt_sigprocmask 135
 #define __BOS_SYS_rt_sigpending 136
 #define __BOS_SYS_rt_sigreturn 139
+#define __BOS_SYS_times 153
 #define __BOS_SYS_setpgid 154
 #define __BOS_SYS_getpgid 155
 #define __BOS_SYS_getsid 156
@@ -84,6 +86,7 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_gettid 178
 #define __BOS_SYS_clone 220
 #define __BOS_SYS_execve 221
+#define __BOS_SYS_getrusage 165
 #define __BOS_SYS_umask 166
 #define __BOS_SYS_renameat2 276
 #define __BOS_SYS_statx 291

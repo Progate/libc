@@ -28,7 +28,7 @@ struct kernel_sigaction {
   uint64_t mask;
 };
 
-/// browseros_sigdeliver が書くフレーム（→ browser-os の src/wasi/linux/signals.ts）
+/// browseros_sigdeliver が書くフレーム（→ browser-os の src/wasi/linux/signals.ts）。`status` は大きさを渡したときだけ書かれる
 struct signal_frame {
   int32_t sig;
   uint32_t handler;
@@ -37,6 +37,8 @@ struct signal_frame {
   int32_t pid;
   uint32_t uid;
   uint64_t oldmask;
+  int32_t status;
+  int32_t pad;
 };
 
 /// カーネルの siginfo_t（riscv32 の Linux。→ wait.c）
@@ -44,7 +46,8 @@ struct kernel_siginfo {
   int32_t signo, error, code;
   int32_t pid;
   uint32_t uid;
-  int32_t pad[27];
+  int32_t status;
+  int32_t pad[26];
 };
 
 /// カーネルの struct timespec（64 ビット）
@@ -103,7 +106,7 @@ __attribute__((export_name("__browseros_signal"))) int __browseros_signal(int hi
   int saved = errno;
   int restart = 1;
   struct signal_frame frame;
-  while (__bos_syscall2(__BOS_SYS_browseros_sigdeliver, hint, __bos_ptr(&frame)) > 0) {
+  while (__bos_syscall3(__BOS_SYS_browseros_sigdeliver, hint, __bos_ptr(&frame), sizeof frame) > 0) {
     hint = 0;
     handled_count++;
     if (frame.flags & SA_SIGINFO) {
@@ -113,6 +116,7 @@ __attribute__((export_name("__browseros_signal"))) int __browseros_signal(int hi
       info.si_code = frame.code;
       info.si_pid = frame.pid;
       info.si_uid = frame.uid;
+      info.si_status = frame.status;
       ((void (*)(int, siginfo_t *, void *))(uintptr_t)(frame.handler & ~KERNEL_HANDLER_BIT))(frame.sig, &info, 0);
     } else {
       decode_handler(frame.handler)(frame.sig);
@@ -239,6 +243,7 @@ int sigtimedwait(const sigset_t *restrict set, siginfo_t *restrict info, const s
     info->si_code = raw.code;
     info->si_pid = raw.pid;
     info->si_uid = raw.uid;
+    info->si_status = raw.status;
   }
   return r;
 }

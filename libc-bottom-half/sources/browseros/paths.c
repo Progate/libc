@@ -78,6 +78,17 @@ int symlinkat(const char *target, int fd, const char *path) {
 
 int symlink(const char *target, const char *path) { return symlinkat(target, AT_FDCWD, path); }
 
+// 名前つきパイプ・UNIX ドメインのソケットの名前・空の通常ファイルを作る（mknod(2)）。umask はカーネルが当てる
+int mknodat(int fd, const char *path, mode_t mode, dev_t dev) {
+  return ret(__bos_syscall4(__BOS_SYS_mknodat, fd, __bos_ptr(path), mode, dev));
+}
+
+int mknod(const char *path, mode_t mode, dev_t dev) { return mknodat(AT_FDCWD, path, mode, dev); }
+
+int mkfifoat(int fd, const char *path, mode_t mode) { return mknodat(fd, path, mode | S_IFIFO, 0); }
+
+int mkfifo(const char *path, mode_t mode) { return mkfifoat(AT_FDCWD, path, mode); }
+
 int linkat(int oldfd, const char *oldpath, int newfd, const char *newpath, int flags) {
   return ret(__bos_syscall5(__BOS_SYS_linkat, oldfd, __bos_ptr(oldpath), newfd, __bos_ptr(newpath), flags));
 }

@@ -21,6 +21,7 @@ __browseros_memory_sync
 __browseros_memory_sync_fd
 __browseros_name_of_address
 __browseros_run_atfork
+__browseros_rusage_of
 __browseros_sem_getvalue
 __browseros_sem_post
 __browseros_sem_timedwait
@@ -548,6 +549,7 @@ __xpg_basename
 __xpg_strerror_r
 __year_to_secs
 _environ
+_exit
 _flushlbf
 _initialize
 _pthread_cleanup_pop
@@ -1182,6 +1184,10 @@ memset
 mkdir
 mkdirat
 mkdtemp
+mkfifo
+mkfifoat
+mknod
+mknodat
 mkostemp
 mkostemp64
 mkostemps

@@ -92,15 +92,15 @@ int fchmodat(int, const char *, mode_t, int);
 mode_t umask(mode_t);
 #endif
 int mkdir(const char *, mode_t);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no fifo */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no fifo */
 int mkfifo(const char *, mode_t);
 #endif
 int mkdirat(int, const char *, mode_t);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no fifo */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no fifo */
 int mkfifoat(int, const char *, mode_t);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* WASI has no mknod */
+#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no mknod */
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 int mknod(const char *, mode_t, dev_t);
 int mknodat(int, const char *, mode_t, dev_t);

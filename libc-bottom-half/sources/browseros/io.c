@@ -1,6 +1,6 @@
 // fd の読み書きと時計・乱数・終わり方（read・write・pread・pwrite・readv・writev・preadv・pwritev・lseek・close・
 // fsync・fdatasync・ftruncate・poll・ppoll・ディレクトリの読み出し・clock_gettime・clock_getres・clock_nanosleep・
-// nanosleep・time・gettimeofday・sched_yield・_Exit・getentropy）。
+// nanosleep・time・gettimeofday・sched_yield・_Exit・_exit・getentropy）。
 //
 // どれもカーネルの Linux の syscall（read(2)・write(2)・_llseek(2)・getdents64(2)・ppoll(2)・clock_gettime(2) ほか）を
 // 呼ぶだけである（→ browser-os の src/wasi/linux/io.ts）。読む端の無いパイプへ書いたときの SIGPIPE もカーネルが送る。
@@ -231,6 +231,9 @@ _Noreturn void _Exit(int status) {
   __bos_syscall1(SYS_exit_group, status);
   __builtin_unreachable();
 }
+
+/// _exit(2)。atexit の処理も stdio の書き出しもせずに終わる（_Exit と同じ）
+_Noreturn void _exit(int status) { _Exit(status); }
 
 int getentropy(void *buffer, size_t length) {
   if (length > 256) {
