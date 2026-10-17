@@ -72,6 +72,9 @@ set(common_flags
   -std=c99 -ffreestanding -nostdinc
   -frounding-math -fno-strict-aliasing -fno-trapping-math
   -ffunction-sections -fdata-sections
+  # 内部の setjmp / longjmp（pthread_cleanup など）を wasm の例外へ落とす。落とさないと
+  # `U setjmp` の生シンボルが残り、実体は -lsetjmp の __wasm_* にしか無いのでリンク不能になる
+  -mllvm -wasm-enable-sjlj
   -fno-unwind-tables -fno-asynchronous-unwind-tables
   -D_XOPEN_SOURCE=700
   -O2
@@ -109,6 +112,15 @@ list(REMOVE_ITEM sources ${fork_sources})
 # setjmp と longjmp は wasm の例外で作る -lsetjmp（-mllvm -wasm-enable-sjlj で組んだプログラムが使う）
 file(GLOB setjmp_sources ${MUSL}/src/setjmp/wasm32/*)
 list(REMOVE_ITEM sources ${setjmp_sources})
+# 名前解決とインターフェース表は BrowserOS の形に置き換える（→ src/network/wasm32/netdb.c・interfaces.c）。
+# musl のものは DNS を自分で喋る・netlink を開く前提で、この OS にはそのどちらも無い
+set(browseros_replaced_sources
+  ${MUSL}/src/network/getaddrinfo.c ${MUSL}/src/network/freeaddrinfo.c ${MUSL}/src/network/getnameinfo.c
+  ${MUSL}/src/network/gethostbyname.c ${MUSL}/src/network/gethostbyname2.c ${MUSL}/src/network/gethostbyname_r.c
+  ${MUSL}/src/network/gethostbyname2_r.c ${MUSL}/src/network/gethostbyaddr.c ${MUSL}/src/network/gethostbyaddr_r.c
+  ${MUSL}/src/network/getifaddrs.c ${MUSL}/src/network/if_nameindex.c ${MUSL}/src/network/if_freenameindex.c
+  ${MUSL}/src/network/if_nametoindex.c ${MUSL}/src/network/if_indextoname.c)
+list(REMOVE_ITEM sources ${browseros_replaced_sources})
 # スレッドの入口はスレッド版だけ
 if(NOT THREADS)
   list(REMOVE_ITEM sources ${MUSL}/src/thread/wasm32/wasi_thread_start.s)
