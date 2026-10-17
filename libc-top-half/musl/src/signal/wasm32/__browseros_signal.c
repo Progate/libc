@@ -13,7 +13,9 @@
 #define SYS_browseros_sigdeliver 1024
 #define HANDLER_BIT 0x80000000U
 
-/* browseros_sigdeliver が書くフレーム（→ browser-os の src/wasi/linux/signals.ts） */
+/* browseros_sigdeliver が書くフレーム（→ browser-os の src/wasi/linux/signals.ts）。3 つ目の引数にフレームの
+ * 大きさを渡したときだけ、カーネルは `status`（sigchld の si_status）まで書く。小さいフレームを渡す古い libc の
+ * 後ろを上書きしないためである */
 struct frame {
 	int32_t sig;
 	uint32_t handler;
@@ -22,6 +24,8 @@ struct frame {
 	int32_t pid;
 	uint32_t uid;
 	uint64_t oldmask;
+	int32_t status;
+	int32_t pad;
 };
 
 /* 戻り値は、EINTR で終わった syscall をやり直してよいか（走らせたハンドラがすべて SA_RESTART を持っていたか） */
@@ -31,7 +35,7 @@ int __browseros_signal(int hint)
 	int saved = errno;
 	int restart = 1;
 	struct frame frame;
-	while (__syscall(SYS_browseros_sigdeliver, hint, &frame) > 0) {
+	while (__syscall(SYS_browseros_sigdeliver, hint, &frame, sizeof frame) > 0) {
 		hint = 0;
 		uintptr_t handler = frame.handler & ~HANDLER_BIT;
 		if (frame.flags & SA_SIGINFO) {
@@ -43,6 +47,7 @@ int __browseros_signal(int hint)
 			info.si_code = frame.code;
 			info.si_pid = frame.pid;
 			info.si_uid = frame.uid;
+			info.si_status = frame.status;
 			memcpy(&uc.uc_sigmask, &frame.oldmask, sizeof frame.oldmask);
 			((void (*)(int, siginfo_t *, void *))handler)(frame.sig, &info, &uc);
 		} else {
