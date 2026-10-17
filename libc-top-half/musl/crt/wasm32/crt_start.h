@@ -33,6 +33,9 @@ int64_t __browseros_linux_syscall(int32_t, int64_t, int64_t, int64_t, int64_t, i
 void __wasm_call_ctors(void);
 int __libc_start_main(int (*)(int, char **, char **), int, char **, void (*)(), void (*)(), void (*)());
 void __init_libc(char **, char *);
+/* __init_libc は hidden なので .so からは呼べない。外から呼べる名前を libc に別名で置いてある
+ * （→ src/env/wasm32/init_libc_export.c） */
+void __browseros_init_libc(char **, char *);
 
 /* C の main は、引数を取るなら __main_argc_argv、取らないなら __main_void という名前になる（clang の wasm の決まり） */
 int __main_argc_argv(int, char **) __attribute__((__weak__));

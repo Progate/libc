@@ -6,6 +6,6 @@ void _initialize(void)
 {
 	int argc;
 	char **argv = build_start_block(&argc);
-	__init_libc(argv + argc + 1, argv[0]);
+	__browseros_init_libc(argv + argc + 1, argv[0]);
 	__libc_start_init();
 }
