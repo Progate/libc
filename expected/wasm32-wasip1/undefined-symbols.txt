@@ -4,6 +4,7 @@ __browseros_args_sizes_get
 __browseros_environ_get
 __browseros_environ_sizes_get
 __browseros_linux_syscall
+__c_longjmp
 __divtf3
 __eqtf2
 __extenddftf2
@@ -23,4 +24,6 @@ __trunctfdf2
 __trunctfsf2
 __unordtf2
 __wasm_call_ctors
-setjmp
+__wasm_longjmp
+__wasm_setjmp
+__wasm_setjmp_test

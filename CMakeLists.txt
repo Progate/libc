@@ -72,6 +72,9 @@ set(common_flags
   -std=c99 -ffreestanding -nostdinc
   -frounding-math -fno-strict-aliasing -fno-trapping-math
   -ffunction-sections -fdata-sections
+  # 内部の setjmp / longjmp（pthread_cleanup など）を wasm の例外へ落とす。落とさないと
+  # `U setjmp` の生シンボルが残り、実体は -lsetjmp の __wasm_* にしか無いのでリンク不能になる
+  -mllvm -wasm-enable-sjlj
   -fno-unwind-tables -fno-asynchronous-unwind-tables
   -D_XOPEN_SOURCE=700
   -O2
