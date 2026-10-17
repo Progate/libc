@@ -204,13 +204,16 @@ musl_objects(libc-static OFF ${sources})
 softfloat_objects(softfloat-static OFF)
 fts_objects(fts-static OFF)
 musl_objects(fork-static OFF ${fork_sources})
+# fork 系の ENOSYS stub（-lbrowseros-nofork。引かないと fork を残すコードがリンクに止まる → browseros/nofork.c）
+musl_objects(nofork-static OFF ${CMAKE_SOURCE_DIR}/browseros/nofork.c)
 musl_objects(setjmp-static OFF ${setjmp_sources})
 target_compile_options(setjmp-static PRIVATE -mllvm -wasm-enable-sjlj -mexception-handling)
 
 add_library(c STATIC $<TARGET_OBJECTS:libc-static> $<TARGET_OBJECTS:softfloat-static> $<TARGET_OBJECTS:fts-static>)
 add_library(browseros-fork STATIC $<TARGET_OBJECTS:fork-static>)
+add_library(browseros-nofork STATIC $<TARGET_OBJECTS:nofork-static>)
 add_library(setjmp STATIC $<TARGET_OBJECTS:setjmp-static>)
-set_target_properties(c browseros-fork setjmp PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${SYSROOT_LIB})
+set_target_properties(c browseros-fork browseros-nofork setjmp PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${SYSROOT_LIB})
 
 # crt1.o（crt1-command.o も同じもの）と crt1-reactor.o
 foreach(crt crt1 crt1-reactor)
@@ -330,7 +333,7 @@ add_custom_command(
     -DCMAKE_NM=${LLVM_NM}
     -DOUT_DIR=${SYSROOT_SHARE}
     -P ${CMAKE_SOURCE_DIR}/cmake/run-check-symbols.cmake
-  DEPENDS c browseros-fork setjmp crt empty-libs headers ${CMAKE_SOURCE_DIR}/cmake/run-check-symbols.cmake)
+  DEPENDS c browseros-fork browseros-nofork setjmp crt empty-libs headers ${CMAKE_SOURCE_DIR}/cmake/run-check-symbols.cmake)
 add_custom_target(check-symbols
   COMMAND diff -wur ${CMAKE_SOURCE_DIR}/expected/${TARGET_TRIPLE} ${SYSROOT_SHARE}
   DEPENDS ${SYSROOT_SHARE}/defined-symbols.txt ${SYSROOT_SHARE}/predefined-macros.txt)
