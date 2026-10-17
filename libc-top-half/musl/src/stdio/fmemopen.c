@@ -27,15 +27,7 @@ fail:
 		errno = EINVAL;
 		return -1;
 	}
-#ifdef __wasilibc_unmodified_upstream // WASI's SEEK_* constants have different values.
 	base = (size_t [3]){0, c->pos, c->len}[whence];
-#else
-	base = (size_t [3]) {
-            [SEEK_SET] = 0,
-            [SEEK_CUR] = c->pos,
-            [SEEK_END] = c->len
-        }[whence];
-#endif
 	if (off < -base || off > (ssize_t)c->size-base) goto fail;
 	return c->pos = base+off;
 }
@@ -129,9 +121,7 @@ FILE *fmemopen(void *restrict buf, size_t size, const char *restrict mode)
 	f->f.seek = mseek;
 	f->f.close = mclose;
 
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
-	if (!libc.threaded) __STDIO_LOCK_RESET(f->f.lock);
-#endif
+	if (!libc.threaded) f->f.lock = -1;
 
 	return __ofl_add(&f->f);
 }

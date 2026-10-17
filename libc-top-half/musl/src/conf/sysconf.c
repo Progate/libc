@@ -1,68 +1,19 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
-#if defined(__wasilibc_browseros) && !defined(__wasilibc_unmodified_upstream)
-#include <fcntl.h>
-
-// BrowserOS のカーネルは、ホストの論理 CPU の数を /proc/cpuinfo の `processor` の行として出している
-// （→ browser-os の fs/proc.ts）。WASI にはこの数を問い合わせる syscall が無いので、その行を数える。
-// 1 と決めて答えると、スレッドを持てる世界でも OpenMP の既定のスレッド数や Python の os.cpu_count() が 1 になり、
-// 並列に動くはずのプログラムが 1 本でしか動かない。/proc の無い世界では、upstream と同じく 1 と答える
-static long cpu_count(void)
-{
-	static const char key[] = "processor";
-	// sysconf は答えられたときに errno を変えない。/proc の無い世界の open の ENOENT を残さない
-	int saved_errno = errno;
-	int fd = open("/proc/cpuinfo", O_RDONLY | O_CLOEXEC);
-	if (fd < 0) {
-		errno = saved_errno;
-		return 1;
-	}
-	char buffer[512];
-	long count = 0;
-	// 行頭から key と一致した文字数。key の長さに達したら数え終わり、key の長さ + 1 はその行を数えない印
-	size_t matched = 0;
-	ssize_t length;
-	while ((length = read(fd, buffer, sizeof buffer)) > 0) {
-		for (ssize_t i = 0; i < length; i++) {
-			if (buffer[i] == '\n') {
-				matched = 0;
-			} else if (matched < sizeof key - 1) {
-				if (buffer[i] != key[matched])
-					matched = sizeof key;
-				else if (++matched == sizeof key - 1)
-					count++;
-			}
-		}
-	}
-	close(fd);
-	errno = saved_errno;
-	return count > 0 ? count : 1;
-}
-#endif
-#ifdef __wasilibc_unmodified_upstream // WASI has no process-level accounting
 #include <sys/resource.h>
-#endif
-#ifdef __wasilibc_unmodified_upstream // WASI has no realtime signals
 #include <signal.h>
-#endif
 #include <sys/sysinfo.h>
-#ifdef __wasilibc_unmodified_upstream
 #include <sys/auxv.h>
 #include "syscall.h"
-#endif
 #include "libc.h"
 
 #define JT(x) (-256|(x))
 #define VER JT(1)
 #define JT_ARG_MAX JT(2)
-#ifdef __wasilibc_unmodified_upstream // WASI has no mq
 #define JT_MQ_PRIO_MAX JT(3)
-#endif
 #define JT_PAGE_SIZE JT(4)
-#if defined(__wasi_cooperative_threads__) || defined(__wasilibc_browseros) // wasi-threads has no semaphores
 #define JT_SEM_VALUE_MAX JT(5)
-#endif
 #define JT_NPROCESSORS_CONF JT(6)
 #define JT_NPROCESSORS_ONLN JT(7)
 #define JT_PHYS_PAGES JT(8)
@@ -78,21 +29,10 @@ long sysconf(int name)
 {
 	static const short values[] = {
 		[_SC_ARG_MAX] = JT_ARG_MAX,
-#ifdef __wasilibc_unmodified_upstream // WASI has no processes
 		[_SC_CHILD_MAX] = RLIM(NPROC),
-#else
-		// Not supported on wasi.
-		[_SC_CHILD_MAX] = -1,
-#endif
 		[_SC_CLK_TCK] = 100,
 		[_SC_NGROUPS_MAX] = 32,
-#ifdef __wasilibc_unmodified_upstream // WASI has no rlimit
 		[_SC_OPEN_MAX] = RLIM(NOFILE),
-#else
-		// Rlimit is not supported on wasi.
-		[_SC_OPEN_MAX] = -1,
-#endif
-
 		[_SC_STREAM_MAX] = -1,
 		[_SC_TZNAME_MAX] = TZNAME_MAX,
 		[_SC_JOB_CONTROL] = 1,
@@ -115,39 +55,19 @@ long sysconf(int name)
 		[_SC_AIO_MAX] = -1,
 		[_SC_AIO_PRIO_DELTA_MAX] = JT_ZERO, /* ?? */
 		[_SC_DELAYTIMER_MAX] = JT_DELAYTIMER_MAX,
-#ifdef __wasilibc_unmodified_upstream // WASI has no mq
 		[_SC_MQ_OPEN_MAX] = -1,
 		[_SC_MQ_PRIO_MAX] = JT_MQ_PRIO_MAX,
-#endif
 		[_SC_VERSION] = VER,
 		[_SC_PAGE_SIZE] = JT_PAGE_SIZE,
-#ifdef __wasilibc_unmodified_upstream // WASI has no realtime signals
 		[_SC_RTSIG_MAX] = _NSIG - 1 - 31 - 3,
-#else
-		// Not supported on wasi.
-		[_SC_RTSIG_MAX] = -1,
-#endif
-// wasi-threads has no semaphores. BrowserOS は名前つきセマフォをカーネルの表で持つ（→ semaphore.c）
-#if defined(__wasi_cooperative_threads__) || defined(__wasilibc_browseros)
 		[_SC_SEM_NSEMS_MAX] = SEM_NSEMS_MAX,
 		[_SC_SEM_VALUE_MAX] = JT_SEM_VALUE_MAX,
-#else
-		[_SC_SEM_NSEMS_MAX] = -1,
-		[_SC_SEM_VALUE_MAX] = -1,
-#endif
 		[_SC_SIGQUEUE_MAX] = -1,
 		[_SC_TIMER_MAX] = -1,
-#ifdef __wasilibc_unmodified_upstream // WASI has no shell commands
 		[_SC_BC_BASE_MAX] = _POSIX2_BC_BASE_MAX,
 		[_SC_BC_DIM_MAX] = _POSIX2_BC_DIM_MAX,
 		[_SC_BC_SCALE_MAX] = _POSIX2_BC_SCALE_MAX,
 		[_SC_BC_STRING_MAX] = _POSIX2_BC_STRING_MAX,
-#else
-		[_SC_BC_BASE_MAX] = -1,
-		[_SC_BC_DIM_MAX] = -1,
-		[_SC_BC_SCALE_MAX] = -1,
-		[_SC_BC_STRING_MAX] = -1,
-#endif
 		[_SC_COLL_WEIGHTS_MAX] = COLL_WEIGHTS_MAX,
 		[_SC_EXPR_NEST_MAX] = -1,
 		[_SC_LINE_MAX] = -1,
@@ -166,22 +86,16 @@ long sysconf(int name)
 		[_SC_GETPW_R_SIZE_MAX] = -1,
 		[_SC_LOGIN_NAME_MAX] = 256,
 		[_SC_TTY_NAME_MAX] = TTY_NAME_MAX,
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 		[_SC_THREAD_DESTRUCTOR_ITERATIONS] = PTHREAD_DESTRUCTOR_ITERATIONS,
 		[_SC_THREAD_KEYS_MAX] = PTHREAD_KEYS_MAX,
 		[_SC_THREAD_STACK_MIN] = PTHREAD_STACK_MIN,
-#else
-		[_SC_THREAD_DESTRUCTOR_ITERATIONS] = -1,
-		[_SC_THREAD_KEYS_MAX] = -1,
-		[_SC_THREAD_STACK_MIN] = -1,
-#endif
 		[_SC_THREAD_THREADS_MAX] = -1,
 		[_SC_THREAD_ATTR_STACKADDR] = VER,
 		[_SC_THREAD_ATTR_STACKSIZE] = VER,
-		[_SC_THREAD_PRIORITY_SCHEDULING] = -1,
+		[_SC_THREAD_PRIORITY_SCHEDULING] = VER,
 		[_SC_THREAD_PRIO_INHERIT] = -1,
 		[_SC_THREAD_PRIO_PROTECT] = -1,
-		[_SC_THREAD_PROCESS_SHARED] = -1,
+		[_SC_THREAD_PROCESS_SHARED] = VER,
 		[_SC_NPROCESSORS_CONF] = JT_NPROCESSORS_CONF,
 		[_SC_NPROCESSORS_ONLN] = JT_NPROCESSORS_ONLN,
 		[_SC_PHYS_PAGES] = JT_PHYS_PAGES,
@@ -265,17 +179,11 @@ long sysconf(int name)
 	} else if (values[name] >= -1) {
 		return values[name];
 	} else if (values[name] < -256) {
-#ifdef __wasilibc_unmodified_upstream // WASI has no getrlimit
 		struct rlimit lim;
 		getrlimit(values[name]&16383, &lim);
 		if (lim.rlim_cur == RLIM_INFINITY)
 			return -1;
 		return lim.rlim_cur > LONG_MAX ? LONG_MAX : lim.rlim_cur;
-#else
-		// Not supported on wasi.
-		errno = EINVAL;
-		return -1;
-#endif
 	}
 
 	switch ((unsigned char)values[name]) {
@@ -283,34 +191,22 @@ long sysconf(int name)
 		return _POSIX_VERSION;
 	case JT_ARG_MAX & 255:
 		return ARG_MAX;
-#ifdef __wasilibc_unmodified_upstream // WASI has no mq
 	case JT_MQ_PRIO_MAX & 255:
 		return MQ_PRIO_MAX;
-#endif
 	case JT_PAGE_SIZE & 255:
 		return PAGE_SIZE;
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasi_cooperative_threads__) || defined(__wasilibc_browseros) // wasi-threads has no semaphores
 	case JT_SEM_VALUE_MAX & 255:
 		return SEM_VALUE_MAX;
-#endif
 	case JT_DELAYTIMER_MAX & 255:
 		return DELAYTIMER_MAX;
 	case JT_NPROCESSORS_CONF & 255:
 	case JT_NPROCESSORS_ONLN & 255: ;
-#ifdef __wasilibc_unmodified_upstream
 		unsigned char set[128] = {1};
 		int i, cnt;
 		__syscall(SYS_sched_getaffinity, 0, sizeof set, set);
 		for (i=cnt=0; i<sizeof set; i++)
 			for (; set[i]; set[i]&=set[i]-1, cnt++);
 		return cnt;
-#elif defined(__wasilibc_browseros)
-		return cpu_count();
-#else
-		// WASI has no way to query the processor count
-		return 1;
-#endif
-#ifdef __wasilibc_unmodified_upstream // WASI has no sysinfo
 	case JT_PHYS_PAGES & 255:
 	case JT_AVPHYS_PAGES & 255: ;
 		unsigned long long mem;
@@ -322,11 +218,6 @@ long sysconf(int name)
 		mem *= si.mem_unit;
 		mem /= PAGE_SIZE;
 		return (mem > LONG_MAX) ? LONG_MAX : mem;
-#endif
-	case JT_ZERO & 255:
-		return 0;
-	}
-#ifdef __wasilibc_unmodified_upstream // WASI has no auxv
 	case JT_MINSIGSTKSZ & 255:
 	case JT_SIGSTKSZ & 255: ;
 		/* Value from auxv/kernel is only sigfame size. Clamp it
@@ -339,6 +230,8 @@ long sysconf(int name)
 		if (values[name] == JT_SIGSTKSZ)
 			val += SIGSTKSZ - MINSIGSTKSZ;
 		return val;
-#endif
+	case JT_ZERO & 255:
+		return 0;
+	}
 	return values[name];
 }

@@ -1,12 +1,6 @@
 #ifndef _FEATURES_H
 #define _FEATURES_H
 
-/* BrowserOS の libc（wasi-libc に、カーネルのホスト関数でプロセス・exec・シグナル・fd の syscall を
- * 足したもの。fork は asyncify で組むプログラムだけが -lbrowseros-fork で選ぶ）。プログラムはこれで「pipe・posix_spawn・waitpid・sigaction がある」を見分けられる */
-#if defined(__wasip1__) && !defined(__wasilibc_unmodified_upstream)
-#define __wasilibc_browseros 1
-#endif
-
 #if defined(_ALL_SOURCE) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE 1
 #endif

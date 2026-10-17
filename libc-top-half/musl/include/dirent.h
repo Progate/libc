@@ -1,10 +1,6 @@
 #ifndef	_DIRENT_H
 #define	_DIRENT_H
 
-#ifdef __wasilibc_unmodified_upstream /* Use alternate WASI libc headers */
-#else
-#include <__header_dirent.h>
-#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,11 +26,7 @@ struct posix_dent {
 	char d_name[];
 };
 
-#ifdef __wasilibc_unmodified_upstream /* Use alternate WASI libc headers */
 typedef struct __dirstream DIR;
-#else
-#include <__typedef_DIR.h>
-#endif
 
 #define d_fileno d_ino
 
@@ -42,15 +34,11 @@ int            closedir(DIR *);
 DIR           *fdopendir(int);
 DIR           *opendir(const char *);
 struct dirent *readdir(DIR *);
-#ifdef __wasilibc_unmodified_upstream /* readdir_r is obsolete */
 int            readdir_r(DIR *__restrict, struct dirent *__restrict, struct dirent **__restrict);
-#endif
 void           rewinddir(DIR *);
 int            dirfd(DIR *);
 
-#ifdef __wasilibc_unmodified_upstream /* not implemented in wasi-libc yet */
 ssize_t posix_getdents(int, void *, size_t, int);
-#endif
 
 int alphasort(const struct dirent **, const struct dirent **);
 int scandir(const char *, struct dirent ***, int (*)(const struct dirent *), int (*)(const struct dirent **, const struct dirent **));
@@ -60,7 +48,6 @@ void           seekdir(DIR *, long);
 long           telldir(DIR *);
 #endif
 
-#ifdef __wasilibc_unmodified_upstream /* Use alternate WASI libc headers */
 #define DT_UNKNOWN 0
 #define DT_FIFO 1
 #define DT_CHR 2
@@ -74,7 +61,6 @@ long           telldir(DIR *);
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 #define IFTODT(x) ((x)>>12 & 017)
 #define DTTOIF(x) ((x)<<12)
-#endif
 int getdents(int, struct dirent *, size_t);
 #endif
 
@@ -82,12 +68,10 @@ int getdents(int, struct dirent *, size_t);
 int versionsort(const struct dirent **, const struct dirent **);
 #endif
 
-#if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
+#if defined(_LARGEFILE64_SOURCE)
 #define dirent64 dirent
 #define readdir64 readdir
-#ifdef __wasilibc_unmodified_upstream /* readdir_r is obsolete */
 #define readdir64_r readdir_r
-#endif
 #define scandir64 scandir
 #define alphasort64 alphasort
 #define versionsort64 versionsort

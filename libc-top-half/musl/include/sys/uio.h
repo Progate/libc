@@ -29,14 +29,13 @@ ssize_t writev (int, const struct iovec *, int);
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 ssize_t preadv (int, const struct iovec *, int, off_t);
 ssize_t pwritev (int, const struct iovec *, int, off_t);
-#if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
+#if defined(_LARGEFILE64_SOURCE)
 #define preadv64 preadv
 #define pwritev64 pwritev
 #define off64_t off_t
 #endif
 #endif
 
-#ifdef __wasilibc_unmodified_upstream // Wasm doesn't have these Linux-specific functions
 #ifdef _GNU_SOURCE
 ssize_t process_vm_writev(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long);
 ssize_t process_vm_readv(pid_t, const struct iovec *, unsigned long, const struct iovec *, unsigned long, unsigned long);
@@ -48,7 +47,6 @@ ssize_t pwritev2 (int, const struct iovec *, int, off_t, int);
 #define RWF_NOWAIT 0x00000008
 #define RWF_APPEND 0x00000010
 #define RWF_NOAPPEND 0x00000020
-#endif
 #endif
 
 #ifdef __cplusplus

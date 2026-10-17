@@ -37,9 +37,7 @@ static unsigned long long wcstox(const wchar_t *s, wchar_t **p, int base, unsign
 	f.flags = 0;
 	f.rpos = f.rend = f.buf = buf + 4;
 	f.buf_size = sizeof buf - 4;
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
-	__STDIO_LOCK_RESET(f.lock);
-#endif
+	f.lock = -1;
 	f.read = do_read;
 	while (iswspace(*t)) t++;
 	f.cookie = (void *)t;

@@ -69,27 +69,19 @@
 #define SEM_VALUE_MAX 0x7fffffff
 #define SEM_NSEMS_MAX 256
 #define DELAYTIMER_MAX 0x7fffffff
-#ifdef __wasilibc_unmodified_upstream /* WASI has no mq */
 #define MQ_PRIO_MAX 32768
-#endif
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no usernames */
 #define LOGIN_NAME_MAX 256
-#endif
 
 /* Arbitrary numbers... */
 
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no shell commands */
 #define BC_BASE_MAX 99
 #define BC_DIM_MAX 2048
 #define BC_SCALE_MAX 99
 #define BC_STRING_MAX 1000
-#endif
 #define CHARCLASS_NAME_MAX 14
 #define COLL_WEIGHTS_MAX 2
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros) /* WASI has no shell commands */
 #define EXPR_NEST_MAX 32
 #define LINE_MAX 4096
-#endif
 #define RE_DUP_MAX 255
 
 #define NL_ARGMAX 9

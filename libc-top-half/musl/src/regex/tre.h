@@ -35,9 +35,7 @@
 
 #undef  TRE_MBSTATE
 
-#ifdef __wasilibc_unmodified_upstream // Allow NDEBUG to be predefined.
 #define NDEBUG
-#endif
 
 #define TRE_REGEX_T_FIELD __opaque
 typedef int reg_errcode_t;

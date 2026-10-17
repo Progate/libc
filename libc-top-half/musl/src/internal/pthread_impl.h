@@ -2,24 +2,16 @@
 #define _PTHREAD_IMPL_H
 
 #include <pthread.h>
-#ifdef __wasilibc_unmodified_upstream
 #include <signal.h>
-#endif
 #include <errno.h>
 #include <limits.h>
-#ifdef __wasilibc_unmodified_upstream
 #include <sys/mman.h>
-#endif
 #include "libc.h"
-#ifdef __wasilibc_unmodified_upstream
 #include "syscall.h"
-#endif
 #include "atomic.h"
 #include "futex.h"
 
 #include "pthread_arch.h"
-#include "lock.h"
-#include <wasi/api.h>
 
 #define pthread __pthread
 
@@ -27,10 +19,8 @@ struct pthread {
 	/* Part 1 -- these fields may be external or
 	 * internal (accessed via asm) ABI. Do not change. */
 	struct pthread *self;
-#ifdef __wasilibc_unmodified_upstream
 #ifndef TLS_ABOVE_TP
 	uintptr_t *dtv;
-#endif
 #endif
 	struct pthread *prev, *next; /* non-ABI */
 	uintptr_t sysinfo;
@@ -65,13 +55,9 @@ struct pthread {
 	int h_errno_val;
 	volatile int timer_id;
 	locale_t locale;
-	DECLARE_WEAK_LOCK(killlock);
+	volatile int killlock[1];
 	char *dlerror_buf;
 	void *stdio_locks;
-	#ifdef __wasi_cooperative_threads__
-	volatile int joiner_futex;
-	char name[16];
-	#endif
 
 	/* Part 3 -- the positions of these fields relative to
 	 * the end of the structure is external and internal ABI. */
@@ -128,26 +114,12 @@ enum {
 #define DTP_OFFSET 0
 #endif
 
-hidden int __init_tp(void *);
-
 #ifdef TLS_ABOVE_TP
 #define TP_ADJ(p) ((char *)(p) + sizeof(struct pthread) + TP_OFFSET)
 #define __pthread_self() ((pthread_t)(__get_tp() - sizeof(struct __pthread) - TP_OFFSET))
-#error "wasi-libc doesn't support this setting"
 #else
 #define TP_ADJ(p) (p)
-static inline pthread_t __pthread_self() {
-  pthread_t ret = (pthread_t) __get_tp();
-  // All user-spawned threads will initialize their TLS block at the start of
-  // the thread itself. For the main thread though the initialization is
-  // deferred until pthread functions are actually used to defer acquiring the
-  // current thread's ID. This is detected here by if the main thread's
-  // self-pointer hasn't yet been initialized then it's time to init the data
-  // for the main thread.
-  if (ret->self != ret)
-    __init_tp(ret);
-  return ret;
-}
+#define __pthread_self() ((pthread_t)__get_tp())
 #endif
 
 #ifndef tls_mod_off_t
@@ -167,9 +139,8 @@ static inline pthread_t __pthread_self() {
 	 0x80000000 })
 
 void *__tls_get_addr(tls_mod_off_t *);
-#if defined(_REENTRANT) && !defined(__wasi_cooperative_threads__)
+hidden int __init_tp(void *);
 hidden void *__copy_tls(unsigned char *);
-#endif
 hidden void __reset_tls();
 
 hidden void __membarrier_init(void);
@@ -188,20 +159,25 @@ extern hidden volatile int __eintr_valid_flag;
 
 hidden int __clone(int (*)(void *), void *, int, void *, ...);
 hidden int __set_thread_area(void *);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no sigaction */
 hidden int __libc_sigaction(int, const struct sigaction *, struct sigaction *);
-#endif
 hidden void __unmapself(void *, size_t);
-
-#ifdef __wasi_cooperative_threads__
-hidden int __wasilibc_pthread_mutex_unlock(pthread_mutex_t *m, int yield);
-#endif
 
 hidden int __timedwait(volatile int *, int, clockid_t, const struct timespec *, int);
 hidden int __timedwait_cp(volatile int *, int, clockid_t, const struct timespec *, int);
 hidden void __wait(volatile int *, volatile int *, int, int);
-hidden void __wake(volatile void *addr, int cnt, int priv);
-hidden void __futexwait(volatile void *addr, int val, int priv);
+static inline void __wake(volatile void *addr, int cnt, int priv)
+{
+	if (priv) priv = FUTEX_PRIVATE;
+	if (cnt<0) cnt = INT_MAX;
+	__syscall(SYS_futex, addr, FUTEX_WAKE|priv, cnt) != -ENOSYS ||
+	__syscall(SYS_futex, addr, FUTEX_WAKE, cnt);
+}
+static inline void __futexwait(volatile void *addr, int val, int priv)
+{
+	if (priv) priv = FUTEX_PRIVATE;
+	__syscall(SYS_futex, addr, FUTEX_WAIT|priv, val, 0) != -ENOSYS ||
+	__syscall(SYS_futex, addr, FUTEX_WAIT, val, 0);
+}
 
 hidden void __acquire_ptc(void);
 hidden void __release_ptc(void);
@@ -211,19 +187,15 @@ hidden void __tl_lock(void);
 hidden void __tl_unlock(void);
 hidden void __tl_sync(pthread_t);
 
-DECLARE_WEAK_LOCK(__thread_list_lock, extern hidden);
-DECLARE_STRONG_LOCK(__abort_lock, extern hidden);
+extern hidden volatile int __thread_list_lock;
+
+extern hidden volatile int __abort_lock[1];
 
 extern hidden unsigned __default_stacksize;
 extern hidden unsigned __default_guardsize;
 
 #define DEFAULT_STACK_SIZE 131072
-#ifdef __wasilibc_unmodified_upstream
 #define DEFAULT_GUARD_SIZE 8192
-#else
-/* guard doesn't make much sense without mprotect. */
-#define DEFAULT_GUARD_SIZE 0
-#endif
 
 #define DEFAULT_STACK_MAX (8<<20)
 #define DEFAULT_GUARD_MAX (1<<20)

@@ -3,10 +3,8 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef __wasilibc_unmodified_upstream // timezone data
 #include <sys/mman.h>
 #include <ctype.h>
-#endif
 #include "libc.h"
 #include "lock.h"
 #include "fork_impl.h"
@@ -16,7 +14,6 @@
 #define realloc undef
 #define free undef
 
-#ifdef __wasilibc_unmodified_upstream // timezone data
 long  __timezone = 0;
 int   __daylight = 0;
 char *__tzname[2] = { 0, 0 };
@@ -27,9 +24,7 @@ weak_alias(__tzname, tzname);
 
 static char std_name[TZNAME_MAX+1];
 static char dst_name[TZNAME_MAX+1];
-#endif
 
-#ifdef __wasilibc_unmodified_upstream // timezone data
 static int dst_off;
 static int r0[5], r1[5];
 
@@ -168,7 +163,7 @@ static void do_tzset()
 		             || !strcmp(dummy_name, "UTC")
 		             || !strcmp(dummy_name, "GMT")))
 			posix_form = 1;
-	}
+	}	
 
 	/* Non-suid can use an absolute tzfile pathname or a relative
 	 * pathame beginning with "."; in secure mode, only the
@@ -429,47 +424,15 @@ static void __tzset()
 }
 
 weak_alias(__tzset, tzset);
-#else
-#ifdef __wasilibc_browseros
-// BrowserOS の libc は時刻帯の表を持たず、localtime はいつも UTC で答える。POSIX が求める tzset と
-// tzname・timezone・daylight はその答えのとおりに置く（読み込むものが無いので tzset は何もしない）
-char *__tzname[2] = { (char *)__utc, (char *)__utc };
-long __timezone = 0;
-int __daylight = 0;
-
-weak_alias(__timezone, timezone);
-weak_alias(__daylight, daylight);
-weak_alias(__tzname, tzname);
-
-void tzset(void)
-{
-}
-#endif
-
-void __secs_to_zone(long long t, int local, int *isdst, int *offset, long *oppoff, const char **zonename)
-{
-	// Minimalist implementation for now.
-	if (isdst)
-		*isdst = 0;
-	if (offset)
-		*offset = 0;
-	if (oppoff)
-		*oppoff = 0;
-	if (zonename)
-		*zonename = __utc;
-}
-#endif
 
 const char *__tm_to_tzname(const struct tm *tm)
 {
 	const void *p = tm->__tm_zone;
-#ifdef __wasilibc_unmodified_upstream // timezone data
 	LOCK(lock);
 	do_tzset();
 	if (p != __utc && p != __tzname[0] && p != __tzname[1] &&
 	    (!zi || (uintptr_t)p-(uintptr_t)abbrevs >= abbrevs_end - abbrevs))
 		p = "";
 	UNLOCK(lock);
-#endif
 	return p;
 }

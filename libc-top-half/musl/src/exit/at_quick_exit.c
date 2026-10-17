@@ -7,26 +7,27 @@
 
 static void (*funcs[COUNT])(void);
 static int count;
-DECLARE_STRONG_LOCK(lock, static);
+static volatile int lock[1];
+volatile int *const __at_quick_exit_lockptr = lock;
 
 void __funcs_on_quick_exit()
 {
 	void (*func)(void);
-	STRONG_LOCK(lock);
+	LOCK(lock);
 	while (count > 0) {
 		func = funcs[--count];
-		STRONG_UNLOCK(lock);
+		UNLOCK(lock);
 		func();
-		STRONG_LOCK(lock);
+		LOCK(lock);
 	}
 }
 
 int at_quick_exit(void (*func)(void))
 {
 	int r = 0;
-	STRONG_LOCK(lock);
+	LOCK(lock);
 	if (count == 32) r = -1;
 	else funcs[count++] = func;
-	STRONG_UNLOCK(lock);
+	UNLOCK(lock);
 	return r;
 }

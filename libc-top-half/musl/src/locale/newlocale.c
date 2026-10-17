@@ -1,8 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 #include <pthread.h>
-#endif
 #include "locale_impl.h"
 #include "lock.h"
 
@@ -63,9 +61,9 @@ static locale_t do_newlocale(int mask, const char *name, locale_t loc)
 
 locale_t __newlocale(int mask, const char *name, locale_t loc)
 {
-	WEAK_LOCK(__locale_lock);
+	LOCK(__locale_lock);
 	loc = do_newlocale(mask, name, loc);
-	WEAK_UNLOCK(__locale_lock);
+	UNLOCK(__locale_lock);
 	return loc;
 }
 

@@ -11,10 +11,8 @@ extern "C" {
 #define __NEED___isoc_va_list
 #define __NEED_size_t
 
-#ifdef __wasilibc_unmodified_upstream /* WASI doesn't need to define FILE as a complete type */
 #if __STDC_VERSION__ < 201112L
 #define __NEED_struct__IO_FILE
-#endif
 #endif
 
 #if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
@@ -27,7 +25,6 @@ extern "C" {
 
 #include <bits/alltypes.h>
 
-#ifdef __wasilibc_unmodified_upstream /* Use the compiler's definition of NULL */
 #if __cplusplus >= 201103L
 #define NULL nullptr
 #elif defined(__cplusplus)
@@ -35,24 +32,16 @@ extern "C" {
 #else
 #define NULL ((void*)0)
 #endif
-#else
-#define __need_NULL
-#include <stddef.h>
-#endif
 
 #undef EOF
 #define EOF (-1)
 
-#ifdef __wasilibc_unmodified_upstream /* Use alternate WASI libc headers */
 #undef SEEK_SET
 #undef SEEK_CUR
 #undef SEEK_END
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
-#else
-#include <__seek.h>
-#endif
 
 #define _IOFBF 0
 #define _IOLBF 1
@@ -61,10 +50,8 @@ extern "C" {
 #define BUFSIZ 1024
 #define FILENAME_MAX 4096
 #define FOPEN_MAX 1000
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #define TMP_MAX 10000
 #define L_tmpnam 20
-#endif
 
 typedef union _G_fpos64_t {
 	char __opaque[16];
@@ -113,11 +100,7 @@ int putchar(int);
 
 char *fgets(char *__restrict, int, FILE *__restrict);
 #if __STDC_VERSION__ < 201112L
-#ifdef __wasilibc_unmodified_upstream /* gets is obsolete */
 char *gets(char *);
-#else
-char *gets(char *) __attribute__((__deprecated__("gets is not defined on WASI")));
-#endif
 #endif
 
 int fputs(const char *__restrict, FILE *__restrict);
@@ -145,13 +128,8 @@ void perror(const char *);
 int setvbuf(FILE *__restrict, char *__restrict, int, size_t);
 void setbuf(FILE *__restrict, char *__restrict);
 
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 char *tmpnam(char *);
 FILE *tmpfile(void);
-#else
-char *tmpnam(char *) __attribute__((__deprecated__("tmpnam is not defined on WASI")));
-FILE *tmpfile(void) __attribute__((__deprecated__("tmpfile is not defined on WASI")));
-#endif
 
 #if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
@@ -159,10 +137,8 @@ FILE *tmpfile(void) __attribute__((__deprecated__("tmpfile is not defined on WAS
 FILE *fmemopen(void *__restrict, size_t, const char *__restrict);
 FILE *open_memstream(char **, size_t *);
 FILE *fdopen(int, const char *);
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 FILE *popen(const char *, const char *);
 int pclose(FILE *);
-#endif
 int fileno(FILE *);
 int fseeko(FILE *, off_t, int);
 off_t ftello(FILE *);
@@ -190,12 +166,10 @@ char *ctermid(char *);
 int renameat2(int, const char *, int, const char *, unsigned);
 #endif
 
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
 #define P_tmpdir "/tmp"
 char *tempnam(const char *, const char *);
-#endif
 #endif
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
@@ -238,10 +212,8 @@ typedef struct _IO_cookie_io_functions_t {
 FILE *fopencookie(void *, const char *, cookie_io_functions_t);
 #endif
 
-#if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
-#if defined(__wasilibc_unmodified_upstream) || defined(__wasilibc_browseros)
+#if defined(_LARGEFILE64_SOURCE)
 #define tmpfile64 tmpfile
-#endif
 #define fopen64 fopen
 #define freopen64 freopen
 #define fseeko64 fseeko

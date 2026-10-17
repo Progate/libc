@@ -2,19 +2,13 @@
 #define _STDIO_IMPL_H
 
 #include <stdio.h>
-#if defined(__wasilibc_unmodified_upstream)
 #include "syscall.h"
-#endif
 
 #define UNGET 8
-
-#include "lock.h"
 
 #define FFINALLOCK(f) ((f)->lock>=0 ? __lockfile((f)) : 0)
 #define FLOCK(f) int __need_unlock = ((f)->lock>=0 ? __lockfile((f)) : 0)
 #define FUNLOCK(f) do { if (__need_unlock) __unlockfile((f)); } while (0)
-#define __STDIO_LOCK_INIT -1
-#define __STDIO_LOCK_RESET(lock) do { (lock) = -1; } while (0)
 
 #define F_PERM 1
 #define F_NORD 4
@@ -29,9 +23,7 @@ struct _IO_FILE {
 	unsigned char *rpos, *rend;
 	int (*close)(FILE *);
 	unsigned char *wend, *wpos;
-#ifdef __wasilibc_unmodified_upstream // WASI doesn't need backwards-compatibility fields.
 	unsigned char *mustbezero_1;
-#endif
 	unsigned char *wbase;
 	size_t (*read)(FILE *, unsigned char *, size_t);
 	size_t (*write)(FILE *, const unsigned char *, size_t);
@@ -40,9 +32,7 @@ struct _IO_FILE {
 	size_t buf_size;
 	FILE *prev, *next;
 	int fd;
-#ifdef __wasilibc_unmodified_upstream // WASI has no popen
 	int pipe_pid;
-#endif
 	long lockcount;
 	int mode;
 	volatile int lock;
@@ -50,9 +40,7 @@ struct _IO_FILE {
 	void *cookie;
 	off_t off;
 	char *getln_buf;
-#ifdef __wasilibc_unmodified_upstream // WASI doesn't need backwards-compatibility fields.
 	void *mustbezero_2;
-#endif
 	unsigned char *shend;
 	off_t shlim, shcnt;
 	FILE *prev_locked, *next_locked;
@@ -63,8 +51,8 @@ extern hidden FILE *volatile __stdin_used;
 extern hidden FILE *volatile __stdout_used;
 extern hidden FILE *volatile __stderr_used;
 
-int __lockfile(FILE *);
-void __unlockfile(FILE *);
+hidden int __lockfile(FILE *);
+hidden void __unlockfile(FILE *);
 
 hidden size_t __stdio_read(FILE *, unsigned char *, size_t);
 hidden size_t __stdio_write(FILE *, const unsigned char *, size_t);
@@ -78,10 +66,8 @@ hidden int __towrite(FILE *);
 hidden void __stdio_exit(void);
 hidden void __stdio_exit_needed(void);
 
-#ifdef __wasilibc_unmodified_upstream // wasm has no "protected" visibility
 #if defined(__PIC__) && (100*__GNUC__+__GNUC_MINOR__ >= 303)
 __attribute__((visibility("protected")))
-#endif
 #endif
 int __overflow(FILE *, int), __uflow(FILE *);
 

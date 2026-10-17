@@ -1,8 +1,6 @@
 #ifndef	_NETDB_H
 #define	_NETDB_H
 
-#include <wasi/version.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -121,17 +119,8 @@ struct hostent *gethostbyaddr (const void *, socklen_t, int);
 #ifdef __GNUC__
 __attribute__((const))
 #endif
-// See `<errno.h>` for why this differs on wasip3
-#if !defined(__wasip1__) && !defined(__wasip2__)
 int *__h_errno_location(void);
 #define h_errno (*__h_errno_location())
-#elif defined(__wasilibc_browseros)
-int *__h_errno_location(void);
-#define h_errno (*__h_errno_location())
-#elif !(defined __wasip1__)
-extern _Thread_local int h_errno;
-#define h_errno h_errno
-#endif
 #define HOST_NOT_FOUND 1
 #define TRY_AGAIN      2
 #define NO_RECOVERY    3
