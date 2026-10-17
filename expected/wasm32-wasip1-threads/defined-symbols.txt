@@ -1251,6 +1251,7 @@ logbl
 logf
 login_tty
 logl
+longjmp
 lrand48
 lremovexattr
 lrint
@@ -1734,7 +1735,6 @@ sigignore
 siginterrupt
 sigisemptyset
 sigismember
-siglongjmp
 signal
 signalfd
 signgam
