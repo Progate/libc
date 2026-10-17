@@ -53,19 +53,22 @@ int fegetround(void)
 	return FE_TONEAREST;
 }
 
+/* wasm rounds to nearest only, so the other modes cannot be selected. */
 int __fesetround(int r)
 {
-	return 0;
+	return r == FE_TONEAREST ? 0 : -1;
 }
 
+/* The environment is the flags, as the riscv32 fcsr holds the flags and the
+   rounding mode (always to nearest here). */
 int fegetenv(fenv_t *envp)
 {
-	envp->__status = get_status();
+	*envp = get_status();
 	return 0;
 }
 
 int fesetenv(const fenv_t *envp)
 {
-	set_status(envp == FE_DFL_ENV ? 0 : envp->__status & FE_ALL_EXCEPT);
+	set_status(envp == FE_DFL_ENV ? 0 : *envp & FE_ALL_EXCEPT);
 	return 0;
 }
