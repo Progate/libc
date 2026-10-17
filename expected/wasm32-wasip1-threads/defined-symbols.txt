@@ -22,6 +22,7 @@ __block_all_sigs
 __block_app_sigs
 __browseros_clone_child
 __browseros_fork_data
+__browseros_init_libc
 __browseros_pthread_self
 __browseros_signal
 __browseros_syscall

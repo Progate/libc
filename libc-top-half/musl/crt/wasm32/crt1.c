@@ -1,5 +1,12 @@
 #include "crt_start.h"
 
+/* .so（拡張モジュール）の側の _initialize は __init_libc を import で呼ぶので、その相手に
+ * なるものを主モジュールの export に入れる（→ src/env/wasm32/init_libc_export.c）。
+ * 参照だけでは libc.a から取り込まれないので、used のアンカーで強く引く */
+void __browseros_init_libc(char **, char *);
+__attribute__((__used__))
+static void (*const __browseros_init_libc_anchor)(char **, char *) = __browseros_init_libc;
+
 static int call_main(int argc, char **argv, char **envp)
 {
 	if (__main_void) return __main_void();
