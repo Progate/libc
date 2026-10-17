@@ -206,10 +206,12 @@ if (WASI STREQUAL "p1")
   # ソケットはカーネルの socket(2) などを呼ぶ browseros/socket.c が持つ（accept・recv・send・getsockopt・shutdown を含む）
   list(APPEND bottom_half_sources
     sources/browseros/atfork.c
+    sources/browseros/clone.c
     sources/browseros/clocks.c
     sources/browseros/dl_iterate_phdr.c
     sources/browseros/exec.c
     sources/browseros/flock.c
+    sources/browseros/inotify.c
     sources/browseros/interfaces.c
     sources/browseros/io.c
     sources/browseros/itimer.c
@@ -221,6 +223,7 @@ if (WASI STREQUAL "p1")
     sources/browseros/popen.c
     sources/browseros/process.c
     sources/browseros/pty.c
+    sources/browseros/resource.c
     sources/browseros/semaphore.c
     sources/browseros/signal.c
     sources/browseros/socket.c

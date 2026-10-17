@@ -1,7 +1,8 @@
 // fork(2)。
 //
-// 呼んだプロセスを写して子を作る。親には子の pid、子には 0 が返り、両方がここから続く。写すのはカーネル
-// （Linux の syscall の入口の browseros_fork。→ browser-os の src/wasi/fork.ts）で、線形メモリ・fd 表・シグナルの扱いを写す。
+// 呼んだプロセスを写して子を作る。親には子の pid、子には 0 が返り、両方がここから続く。写すのはカーネルの clone(2)
+// （`SIGCHLD` だけを渡す fork の形。→ browser-os の src/process/vfork.ts・src/wasi/fork.ts）で、線形メモリ・fd 表・
+// シグナルの扱いを写す。asyncify の書き出し場所は、CLONE_SETTLS を立てないときに使われない tls の引数で渡す。
 //
 // 関数のフレームとローカル変数は wasm の外から読めないので、プログラムは asyncify（`wasm-opt --asyncify
 // --pass-arg=asyncify-imports@browser_os_linux.syscall`）で組んでおく。カーネルは asyncify で積み重なりを
@@ -16,6 +17,7 @@
 #include <browseros/linux.h>
 #include <browseros/libc.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdint.h>
 #include <unistd.h>
 
@@ -53,8 +55,9 @@ pid_t fork(void) {
   uintptr_t sp = stack_pointer();
   data.current = data.stack;
   data.end = data.stack + sizeof(data.stack);
-  int32_t pid = 0;
-  long r = __bos_syscall2(__BOS_SYS_browseros_fork, __bos_ptr(&data), __bos_ptr(&pid));
+  // clone(flags, newsp, ptid, tls, ctid)
+  long r = __bos_syscall5(__BOS_SYS_clone, SIGCHLD, 0, 0, __bos_ptr(&data), 0);
+  int32_t pid = (int32_t)r;
   if (r < 0) {
     __browseros_run_atfork(1);
     errno = (int)-r;
@@ -68,3 +71,6 @@ pid_t fork(void) {
   __browseros_run_atfork(1);
   return pid;
 }
+
+/// vfork(2)。musl の C 版と同じく fork の形の clone にする（子は親を写したもので走る）
+pid_t vfork(void) { return fork(); }

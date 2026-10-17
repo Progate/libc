@@ -29,8 +29,10 @@ static inline void to_public_stat(const __wasi_filestat_t *in,
     * The non-standard __st_filetype field appears to only be used for shared
     * memory, which we don't currently support.
     */
+#ifndef __wasilibc_browseros
    /* nlink_t is 64-bit on wasm32, following the x32 ABI. */
   static_assert(sizeof(in->nlink) <= sizeof(out->st_nlink), "Size shortfall");
+#endif
 
   static_assert(sizeof(in->size) == sizeof(out->st_size), "Size mismatch");
 

@@ -1,21 +1,13 @@
-// posix_spawn(3) / posix_spawnp(3) と file actions。
+// posix_spawn(3) / posix_spawnp(3) と file actions（musl の src/process/posix_spawn.c と同じ形）。
 //
-// 子を起こすのはカーネルの browseros_posix_spawn（この OS が足した syscall。wasm は自分を写せないので Linux の
-// clone(2) + execve(2) の形にできず、macOS の XNU が syscall として持つ posix_spawn を前例にする）である。file actions と
-// attr はバイト列にして渡し、カーネルが子の fd 表に順に当てる（子の fd は親の fd と同じ開いたファイルの記述を指す）。
-// 並べ方は browser-os の process/wasi-spawn.ts と README「本物と同じ形で起こす」にある。argv・envp は `char *` の並びの
-// まま渡す。
+// 子は clone(2) の `CLONE_VM | CLONE_VFORK` で作る（→ clone.c）。子は親のメモリの上で、親を止めたまま走り、シグナルの
+// 動作を既定に戻し、attr（`POSIX_SPAWN_SETSID`・`SETPGROUP`・`RESETIDS`・`SETSIGMASK`・`SETSIGDEF`）と file actions を
+// 本物の syscall で当ててから execve(2) する。子の段で失敗したら、その errno を親と共有のメモリに置いて 127 で終わり、
+// 親はその子を回収して errno を返す（musl はパイプで返すが、ここでは同じメモリなので変数で返す）。
 //
-// - 作業ディレクトリ: カーネルが持つ。子は親のいまの作業ディレクトリで始まり、相対パスの addopen・addchdir と起こす
-//   もののパスはそこから引かれる
-// - PATH: posix_spawnp は呼んだプロセスのいまの PATH を引いて、`/` のあるパスで 1 つずつ試す（musl・execvp(3) と同じ）
-// - umask: addopen が作るファイルの権限は `mode & ~umask` にして渡す
-//
-// 3 以上の fd を開いたまま子に残す file actions のうち、カーネルが表せないものは ENOTSUP で断られる
-// （→ browser-os の process/wasi-spawn.ts）。
+// posix_spawnp は、子の中で呼んだプロセスの PATH を引いて、`/` のあるパスで 1 つずつ試す（execvpe。musl と同じ）。
 
 #define _GNU_SOURCE
-#include <browseros/host.h>
 #include <browseros/linux.h>
 #include <browseros/libc.h>
 #include <errno.h>
@@ -26,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 extern char **environ;
@@ -208,77 +201,15 @@ int posix_spawnattr_getschedpolicy(const posix_spawnattr_t *restrict attr, int *
   return 0;
 }
 
-/// file actions のバイト列を伸ばしながら書く先
-struct buffer {
-  unsigned char *data;
-  size_t len, cap;
-  int failed;
-};
+#define SYS_clone 220
+#define CLONE_VM 0x100
+#define CLONE_VFORK 0x4000
+#define SIG_SETMASK_ 2
+#define SIG_BLOCK_ 0
 
-static void put(struct buffer *out, const void *bytes, size_t len) {
-  if (out->failed)
-    return;
-  if (out->len + len > out->cap) {
-    size_t cap = out->cap ? out->cap * 2 : 256;
-    while (cap < out->len + len)
-      cap *= 2;
-    unsigned char *data = realloc(out->data, cap);
-    if (!data) {
-      out->failed = 1;
-      return;
-    }
-    out->data = data;
-    out->cap = cap;
-  }
-  memcpy(out->data + out->len, bytes, len);
-  out->len += len;
-}
+int __clone(int (*fn)(void *), void *stack, int flags, void *arg, ...);
 
-/// file actions 1 件（op, fd, newfd, oflag, mode, path の長さ。すべて 32 ビット）と path を書く。次の件は 4 バイト境界から
-static void put_action(struct buffer *out, uint32_t op, int32_t fd, int32_t newfd, uint32_t oflag,
-                       uint32_t mode, const char *path) {
-  uint32_t path_len = path ? strlen(path) : 0;
-  uint32_t head[6] = {op, (uint32_t)fd, (uint32_t)newfd, oflag, mode, path_len};
-  put(out, head, sizeof head);
-  if (path_len) {
-    static const unsigned char zeros[3];
-    put(out, path, path_len);
-    put(out, zeros, (4 - path_len % 4) % 4);
-  }
-}
-
-/// file actions をバイト列にする（子の作業ディレクトリは、カーネルが持っている親の作業ディレクトリから始まる）
-static int encode_actions(const posix_spawn_file_actions_t *fa, struct buffer *out) {
-  struct fdop *op = fa ? fa->__actions : 0;
-  // 最後の 1 つを指しているので、最初の 1 つへ戻ってから順に書く
-  while (op && op->prev)
-    op = op->prev;
-  for (; op; op = op->next) {
-    switch (op->cmd) {
-    case FDOP_CLOSE:
-      put_action(out, __BROWSEROS_SPAWN_CLOSE, op->fd, -1, 0, 0, 0);
-      break;
-    case FDOP_DUP2:
-      put_action(out, __BROWSEROS_SPAWN_DUP2, op->srcfd, op->fd, 0, 0, 0);
-      break;
-    case FDOP_OPEN:
-      put_action(out, __BROWSEROS_SPAWN_OPEN, op->fd, -1, op->oflag, __browseros_creation_mode(op->mode),
-                 op->path);
-      break;
-    case FDOP_CHDIR:
-      put_action(out, __BROWSEROS_SPAWN_CHDIR, -1, -1, 0, 0, op->path);
-      break;
-    case FDOP_FCHDIR:
-      put_action(out, __BROWSEROS_SPAWN_FCHDIR, op->fd, -1, 0, 0, 0);
-      break;
-    default:
-      return EINVAL;
-    }
-  }
-  return out->failed ? ENOMEM : 0;
-}
-
-/// sigset_t を u64 にする（シグナル n はビット n-1。カーネルの attr の並び）
+/// sigset_t を u64 にする（シグナル n はビット n-1。カーネルの rt_sigprocmask・rt_sigaction の並び）
 static uint64_t mask_of_set(const sigset_t *set) {
   uint64_t mask = 0;
   for (int sig = 1; sig < _NSIG && sig <= 64; sig++)
@@ -287,131 +218,157 @@ static uint64_t mask_of_set(const sigset_t *set) {
   return mask;
 }
 
-/// カーネルへ渡す attr（flags・sigdefault・sigmask・pgroup）
-struct encoded_attr {
-  uint32_t flags, pad;
-  uint64_t sigdefault, sigmask;
-  int32_t pgroup, pad2;
+/// カーネルの struct sigaction（riscv32 の Linux。SA_RESTORER は無い）
+struct kernel_sigaction {
+  uint32_t handler;
+  uint32_t flags;
+  uint64_t mask;
 };
 
-/// カーネルの browseros_posix_spawn への頼み（→ browser-os の src/wasi/linux/process.ts）
-struct spawn_request {
-  uint32_t path, actions, actions_len, attr, attr_len, argv, envp;
+/// 子へ渡すもの。子が書いた `error` は親から見える（CLONE_VM）
+struct spawn_args {
+  const char *path;
+  const posix_spawn_file_actions_t *fa;
+  const posix_spawnattr_t *attr;
+  char *const *argv;
+  char *const *envp;
+  uint64_t oldmask;
+  int search;
+  int error;
 };
 
-/// 1 つのパスで起こす。file actions と attr はもうバイト列になっている
-static int spawn_path(pid_t *pid, const char *path, const struct buffer *actions, const struct encoded_attr *attr,
-                      char *const argv[], char *const envp[]) {
-  int32_t child = 0;
-  struct spawn_request request = {
-      .path = (uintptr_t)path,
-      .actions = (uintptr_t)actions->data,
-      .actions_len = actions->len,
-      .attr = (uintptr_t)attr,
-      .attr_len = sizeof *attr,
-      .argv = (uintptr_t)argv,
-      .envp = (uintptr_t)envp,
-  };
-  long r = __bos_syscall2(__BOS_SYS_browseros_posix_spawn, __bos_ptr(&child), __bos_ptr(&request));
-  if (r < 0)
-    return -r;
-  if (pid)
-    *pid = child;
-  return 0;
-}
+/// 子の段。ここで失敗したら errno を置いて 127 で終わる
+static int child(void *opaque) {
+  struct spawn_args *args = opaque;
+  const posix_spawnattr_t *attr = args->attr;
+  short flags = attr ? attr->__flags : 0;
+  long r = 0;
 
-/**
- * `dir` と `file` を繋いだパスで起こす。カーネルは `/` の無い名前を PATH から探すので、`dir` が空（PATH の空の要素・
- * posix_spawn に渡された相対の名前）なら `./` を付けて、子の作業ディレクトリからの相対パスにする
- */
-static int spawn_in(pid_t *pid, const char *dir, size_t dir_len, const char *file,
-                    const struct buffer *actions, const struct encoded_attr *attr, char *const argv[],
-                    char *const envp[]) {
-  size_t file_len = strlen(file);
-  char *path = malloc(dir_len + file_len + 3);
-  if (!path)
-    return ENOMEM;
-  if (dir_len) {
-    memcpy(path, dir, dir_len);
-    path[dir_len] = '/';
-    memcpy(path + dir_len + 1, file, file_len + 1);
-  } else {
-    memcpy(path, "./", 2);
-    memcpy(path + 2, file, file_len + 1);
+  /*
+   * シグナルの扱いは、マスクを開ける前に既定か無視にしておく。開けたあとで親のハンドラが子の中で走ると、親と共有の
+   * メモリを壊す（musl と同じ）。SETSIGDEF に挙げたものは既定に戻す
+   */
+  for (int sig = 1; sig < _NSIG && sig <= 64; sig++) {
+    struct kernel_sigaction sa = {0};
+    if ((flags & POSIX_SPAWN_SETSIGDEF) && sigismember(&attr->__def, sig)) {
+      sa.handler = 0;
+    } else {
+      struct kernel_sigaction old;
+      if (__bos_syscall4(__BOS_SYS_rt_sigaction, sig, 0, __bos_ptr(&old), 8) < 0)
+        continue;
+      if (old.handler == 0 || old.handler == 1)
+        continue;
+      sa.handler = 0;
+    }
+    __bos_syscall4(__BOS_SYS_rt_sigaction, sig, __bos_ptr(&sa), 0, 8);
   }
-  int error = spawn_path(pid, path, actions, attr, argv, envp);
-  free(path);
-  return error;
-}
 
-/**
- * 起こす。`search` なら `file` に `/` が無いとき、呼んだプロセスの PATH から 1 つずつ試す。
- * 見つからない（ENOENT・ENOTDIR）なら次へ進み、どれでも見つからなければ ENOENT、権限で断られたものがあれば EACCES
- * （musl の posix_spawnp・execvp(3) と同じ）
- */
-static int spawn(pid_t *restrict pid, const char *restrict file,
-                 const posix_spawn_file_actions_t *fa, const posix_spawnattr_t *restrict attr,
-                 char *const argv[restrict], char *const envp[restrict], int search) {
-  if (!*file)
-    return ENOENT;
-  if (strnlen(file, PATH_MAX) >= PATH_MAX)
-    return ENAMETOOLONG;
-  struct buffer actions = {0};
-  int error = encode_actions(fa, &actions);
-  // 子へ継ぐシグナルの扱いはカーネルが親の扱い（カーネルが持っている）と attr から決める
-  struct encoded_attr encoded = {0};
-  if (attr) {
-    encoded.flags = (uint16_t)attr->__flags;
-    encoded.sigdefault = mask_of_set(&attr->__def);
-    encoded.sigmask = mask_of_set(&attr->__mask);
-    encoded.pgroup = attr->__pgrp;
+  if ((flags & POSIX_SPAWN_SETSID) && (r = __bos_syscall0(__BOS_SYS_setsid)) < 0)
+    goto fail;
+  if ((flags & POSIX_SPAWN_SETPGROUP) && (r = __bos_syscall2(__BOS_SYS_setpgid, 0, attr->__pgrp)) < 0)
+    goto fail;
+  // 利用者はプロセスごとに 1 つなので、実の id へ戻すことはいつも通る（RESETIDS）
+  if (flags & POSIX_SPAWN_RESETIDS) {
+    // 何もしない
   }
-  char *const *env = envp ? envp : environ;
 
-  if (error) {
-    // 組み立てに失敗した。何も起こさない
-  } else if (strchr(file, '/')) {
-    error = spawn_path(pid, file, &actions, &encoded, argv, env);
-  } else if (!search) {
-    // posix_spawn の `path` は PATH を引かない。`/` の無い名前も作業ディレクトリからの相対パスである
-    error = spawn_in(pid, "", 0, file, &actions, &encoded, argv, env);
-  } else {
-    const char *path = getenv("PATH");
-    if (!path)
-      path = "/usr/local/bin:/bin:/usr/bin";
-    int seen_eacces = 0;
-    error = ENOENT;
-    for (const char *p = path;; p++) {
-      const char *z = strchrnul(p, ':');
-      int tried = spawn_in(pid, p, z - p, file, &actions, &encoded, argv, env);
-      if (tried == EACCES) {
-        seen_eacces = 1;
-      } else if (tried != ENOENT && tried != ENOTDIR) {
-        error = tried;
+  if (args->fa && args->fa->__actions) {
+    struct fdop *op = args->fa->__actions;
+    // 最後の 1 つを指しているので、最初の 1 つへ戻ってから順に当てる
+    while (op->prev)
+      op = op->prev;
+    for (; op; op = op->next) {
+      switch (op->cmd) {
+      case FDOP_CLOSE:
+        // 閉じている fd を閉じても失敗にしない（posix_spawn_file_actions_addclose）
+        __bos_syscall1(57, op->fd);
+        break;
+      case FDOP_DUP2:
+        if (op->srcfd != op->fd) {
+          if ((r = __bos_syscall3(__BOS_SYS_dup3, op->srcfd, op->fd, 0)) < 0)
+            goto fail;
+        } else {
+          // 同じ番号なら close-on-exec を落とす
+          if ((r = __bos_syscall2(__BOS_SYS_fcntl64, op->fd, F_GETFD)) < 0 ||
+              (r = __bos_syscall3(__BOS_SYS_fcntl64, op->fd, F_SETFD, r & ~FD_CLOEXEC)) < 0)
+            goto fail;
+        }
+        break;
+      case FDOP_OPEN: {
+        long fd = __bos_syscall4(__BOS_SYS_openat, AT_FDCWD, __bos_ptr(op->path), op->oflag, op->mode);
+        if ((r = fd) < 0)
+          goto fail;
+        if (fd != op->fd) {
+          if ((r = __bos_syscall3(__BOS_SYS_dup3, fd, op->fd, 0)) < 0)
+            goto fail;
+          __bos_syscall1(57, fd);
+        }
         break;
       }
-      if (!*z)
+      case FDOP_CHDIR:
+        if ((r = __bos_syscall1(__BOS_SYS_chdir, __bos_ptr(op->path))) < 0)
+          goto fail;
         break;
-      p = z;
+      case FDOP_FCHDIR:
+        if ((r = __bos_syscall1(__BOS_SYS_fchdir, op->fd)) < 0)
+          goto fail;
+        break;
+      }
     }
-    if (error == ENOENT && seen_eacces)
-      error = EACCES;
   }
-  free(actions.data);
+
+  uint64_t mask = (flags & POSIX_SPAWN_SETSIGMASK) ? mask_of_set(&attr->__mask) : args->oldmask;
+  __bos_syscall4(__BOS_SYS_rt_sigprocmask, SIG_SETMASK_, __bos_ptr(&mask), 0, 8);
+
+  if (args->search)
+    execvpe(args->path, args->argv, args->envp);
+  else
+    execve(args->path, args->argv, args->envp);
+  r = -errno;
+
+fail:
+  args->error = (int)-r;
+  _Exit(127);
+}
+
+/// 起こす。`search` なら `file` に `/` が無いとき、子の中で呼んだプロセスの PATH から探す
+static int spawn(pid_t *restrict pid, const char *restrict file, const posix_spawn_file_actions_t *fa,
+                 const posix_spawnattr_t *restrict attr, char *const argv[restrict], char *const envp[restrict],
+                 int search) {
+  struct spawn_args args = {
+      .path = file,
+      .fa = fa,
+      .attr = attr,
+      .argv = argv,
+      .envp = envp ? envp : environ,
+      .search = search,
+      .error = 0,
+  };
+  // 子の段のあいだ、親のハンドラが走らないように、すべてのシグナルを塞いでおく（子は終わりに元へ戻す）
+  uint64_t all = ~(uint64_t)0;
+  __bos_syscall4(__BOS_SYS_rt_sigprocmask, SIG_BLOCK_, __bos_ptr(&all), __bos_ptr(&args.oldmask), 8);
+  // 子が始まる前に、MAP_SHARED の写しに書いたものを出しておく（子は写しをファイルから読む。→ memory_sync.c）
+  __browseros_memory_sync();
+  int child_pid = __clone(child, 0, CLONE_VM | CLONE_VFORK | SIGCHLD, &args);
+  int error = child_pid < 0 ? -child_pid : args.error;
+  // 子の段で失敗した子は、ここで回収する（その子は 127 で終わっている）
+  if (child_pid > 0 && error) {
+    // カーネルの siginfo_t（riscv32 の Linux。128 バイト）を受ける場所
+    uint64_t info[16];
+    __bos_syscall5(__BOS_SYS_waitid, P_PID, child_pid, __bos_ptr(info), WEXITED, 0);
+  }
+  if (!error && pid)
+    *pid = child_pid;
+  __bos_syscall4(__BOS_SYS_rt_sigprocmask, SIG_SETMASK_, __bos_ptr(&args.oldmask), 0, 8);
   return error;
 }
 
-int posix_spawn(pid_t *restrict pid, const char *restrict path,
-                const posix_spawn_file_actions_t *fa, const posix_spawnattr_t *restrict attr,
-                char *const argv[restrict], char *const envp[restrict]) {
-  // 子が始まる前に、MAP_SHARED の写しに書いたものを出しておく（子は写しをファイルから読む。→ memory_sync.c）
-  __browseros_memory_sync();
+int posix_spawn(pid_t *restrict pid, const char *restrict path, const posix_spawn_file_actions_t *fa,
+                const posix_spawnattr_t *restrict attr, char *const argv[restrict], char *const envp[restrict]) {
   return spawn(pid, path, fa, attr, argv, envp, 0);
 }
 
-int posix_spawnp(pid_t *restrict pid, const char *restrict file,
-                 const posix_spawn_file_actions_t *fa, const posix_spawnattr_t *restrict attr,
-                 char *const argv[restrict], char *const envp[restrict]) {
-  __browseros_memory_sync();
+int posix_spawnp(pid_t *restrict pid, const char *restrict file, const posix_spawn_file_actions_t *fa,
+                 const posix_spawnattr_t *restrict attr, char *const argv[restrict], char *const envp[restrict]) {
   return spawn(pid, file, fa, attr, argv, envp, 1);
 }

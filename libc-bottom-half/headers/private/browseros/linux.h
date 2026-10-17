@@ -58,6 +58,7 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_openat 56
 #define __BOS_SYS_pipe2 59
 #define __BOS_SYS_readlinkat 78
+#define __BOS_SYS_exit 93
 #define __BOS_SYS_waitid 95
 #define __BOS_SYS_getitimer 102
 #define __BOS_SYS_setitimer 103
@@ -81,6 +82,7 @@ long __browseros_syscall_ret(long r);
 #define __BOS_SYS_getgid 176
 #define __BOS_SYS_getegid 177
 #define __BOS_SYS_gettid 178
+#define __BOS_SYS_clone 220
 #define __BOS_SYS_execve 221
 #define __BOS_SYS_umask 166
 #define __BOS_SYS_renameat2 276
@@ -92,10 +94,6 @@ long __browseros_syscall_ret(long r);
 // この OS が足した syscall（Linux が使わない 1024 から。→ browser-os の src/wasi/linux/）
 /// 配るシグナルを 1 つ受け取る（Linux ではカーネルがハンドラのフレームを積むところ。→ signal.c）
 #define __BOS_SYS_browseros_sigdeliver 1024
-/// 子を起こす（posix_spawn。macOS の XNU が syscall として持つものを前例にする。→ spawn.c）
-#define __BOS_SYS_browseros_posix_spawn 1025
-/// 自分を写して子を作る（fork。asyncify で積み重なりを書き出す。→ fork/fork.c）
-#define __BOS_SYS_browseros_fork 1026
 
 // 値が Linux とこの libc で違う定数の、Linux の値
 #define __BOS_O_NONBLOCK 04000

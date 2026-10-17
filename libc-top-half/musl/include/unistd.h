@@ -248,8 +248,10 @@ unsigned ualarm(unsigned, unsigned);
 int brk(void *);
 #endif
 void *sbrk(intptr_t);
-#ifdef __wasilibc_unmodified_upstream /* WASI has no processes */
+#if defined(__wasilibc_unmodified_upstream) || (defined(__wasilibc_browseros) && defined(_BROWSEROS_FORK)) /* BrowserOS: fork と同じく -lbrowseros-fork */
 pid_t vfork(void);
+#endif
+#ifdef __wasilibc_unmodified_upstream /* WASI has no processes */
 int vhangup(void);
 int chroot(const char *);
 #endif

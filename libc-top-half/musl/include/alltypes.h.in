@@ -38,7 +38,12 @@ TYPEDEF unsigned _Int64 u_int64_t;
 TYPEDEF unsigned _Int64 uintmax_t;
 
 TYPEDEF unsigned mode_t;
+#ifdef __wasip1__
+/* BrowserOS: riscv32 の Linux と同じく 32 ビット */
+TYPEDEF unsigned int nlink_t;
+#else
 TYPEDEF unsigned _Reg nlink_t;
+#endif
 TYPEDEF _Int64 off_t;
 TYPEDEF unsigned _Int64 ino_t;
 TYPEDEF unsigned _Int64 dev_t;

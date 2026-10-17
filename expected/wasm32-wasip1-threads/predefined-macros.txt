@@ -1543,6 +1543,9 @@
 #define INT_LEAST8_MIN INT8_MIN
 #define INT_MAX 0x7fffffff
 #define INT_MIN (-1-0x7fffffff)
+#define IN_ACCESS 0x00000001
+#define IN_ALL_EVENTS 0x00000fff
+#define IN_ATTRIB 0x00000004
 #define IN_BADCLASS(a) ((((in_addr_t)(a)) & 0xf0000000) == 0xf0000000)
 #define IN_CLASSA(a) ((((in_addr_t)(a)) & 0x80000000) == 0)
 #define IN_CLASSA_HOST (0xffffffff & ~IN_CLASSA_NET)
@@ -1559,9 +1562,33 @@
 #define IN_CLASSC_NET 0xffffff00
 #define IN_CLASSC_NSHIFT 8
 #define IN_CLASSD(a) ((((in_addr_t)(a)) & 0xf0000000) == 0xe0000000)
+#define IN_CLOEXEC O_CLOEXEC
+#define IN_CLOSE (IN_CLOSE_WRITE | IN_CLOSE_NOWRITE)
+#define IN_CLOSE_NOWRITE 0x00000010
+#define IN_CLOSE_WRITE 0x00000008
+#define IN_CREATE 0x00000100
+#define IN_DELETE 0x00000200
+#define IN_DELETE_SELF 0x00000400
+#define IN_DONT_FOLLOW 0x02000000
+#define IN_EXCL_UNLINK 0x04000000
 #define IN_EXPERIMENTAL(a) ((((in_addr_t)(a)) & 0xe0000000) == 0xe0000000)
+#define IN_IGNORED 0x00008000
+#define IN_ISDIR 0x40000000
 #define IN_LOOPBACKNET 127
+#define IN_MASK_ADD 0x20000000
+#define IN_MASK_CREATE 0x10000000
+#define IN_MODIFY 0x00000002
+#define IN_MOVE (IN_MOVED_FROM | IN_MOVED_TO)
+#define IN_MOVED_FROM 0x00000040
+#define IN_MOVED_TO 0x00000080
+#define IN_MOVE_SELF 0x00000800
 #define IN_MULTICAST(a) IN_CLASSD(a)
+#define IN_NONBLOCK O_NONBLOCK
+#define IN_ONESHOT 0x80000000
+#define IN_ONLYDIR 0x01000000
+#define IN_OPEN 0x00000020
+#define IN_Q_OVERFLOW 0x00004000
+#define IN_UNMOUNT 0x00002000
 #define IOV_MAX 1024
 #define IP 244
 #define IP6F_MORE_FRAG 0x0100
@@ -2737,6 +2764,30 @@
 #define RHF_REQUICKSTARTED (1 << 11)
 #define RHF_RLD_ORDER_SAFE (1 << 14)
 #define RHF_SGI_ONLY (1 << 4)
+#define RLIM64_INFINITY RLIM_INFINITY
+#define RLIM64_SAVED_CUR RLIM_SAVED_CUR
+#define RLIM64_SAVED_MAX RLIM_SAVED_MAX
+#define RLIMIT_AS 9
+#define RLIMIT_CORE 4
+#define RLIMIT_CPU 0
+#define RLIMIT_DATA 2
+#define RLIMIT_FSIZE 1
+#define RLIMIT_LOCKS 10
+#define RLIMIT_MEMLOCK 8
+#define RLIMIT_MSGQUEUE 12
+#define RLIMIT_NICE 13
+#define RLIMIT_NLIMITS 16
+#define RLIMIT_NOFILE 7
+#define RLIMIT_NPROC 6
+#define RLIMIT_RSS 5
+#define RLIMIT_RTPRIO 14
+#define RLIMIT_RTTIME 15
+#define RLIMIT_SIGPENDING 11
+#define RLIMIT_STACK 3
+#define RLIM_INFINITY (~0ULL)
+#define RLIM_NLIMITS RLIMIT_NLIMITS
+#define RLIM_SAVED_CUR RLIM_INFINITY
+#define RLIM_SAVED_MAX RLIM_INFINITY
 #define RMSGD 0x0001
 #define RMSGN 0x0002
 #define RNORM 0x0000
@@ -5262,6 +5313,8 @@
 #define _CTYPE_H 
 #define _Complex_I (0.0f+1.0fi)
 #define _DIRENT_H 
+#define _DIRENT_HAVE_D_OFF 
+#define _DIRENT_HAVE_D_RECLEN 
 #define _DIRENT_HAVE_D_TYPE 
 #define _DLFCN_H 
 #define _ELF_H 
@@ -5579,6 +5632,7 @@
 #define _SYSEXITS_H 
 #define _SYS_EVENTFD_H 
 #define _SYS_FILE_H 
+#define _SYS_INOTIFY_H 
 #define _SYS_IOCTL_H 
 #define _SYS_PARAM_H 
 #define _SYS_RANDOM_H 
@@ -5586,6 +5640,7 @@
 #define _SYS_RESOURCE_H 
 #define _SYS_SELECT_H 
 #define _SYS_SOCKET_H 
+#define _SYS_STATFS_H 
 #define _SYS_STATVFS_H 
 #define _SYS_STAT_H 
 #define _SYS_SYSCALL_H 
@@ -6392,10 +6447,12 @@
 #define fsfilcnt64_t fsfilcnt_t
 #define fstat64 fstat
 #define fstatat64 fstatat
+#define fstatfs64 fstatfs
 #define fstatvfs64 fstatvfs
 #define ftello64 ftello
 #define ftruncate64 ftruncate
 #define getdents64 getdents
+#define getrlimit64 getrlimit
 #define glob64 glob
 #define glob64_t glob_t
 #define globfree64 globfree
@@ -6570,6 +6627,7 @@
 #define powerof2(n) !(((n)-1) & (n))
 #define pread64 pread
 #define preadv64 preadv
+#define prlimit64 prlimit
 #define pthread_cleanup_pop(r) _pthread_cleanup_pop(&__cb, (r)); } while(0)
 #define pthread_cleanup_push(f,x) do { struct __ptcb __cb; _pthread_cleanup_push(&__cb, f, x);
 #define pthread_equal(x,y) ((x)==(y))
@@ -6580,6 +6638,8 @@
 #define remquo(x,y,z) __tg_real_remquo((x), (y), (z))
 #define required_argument 1
 #define rint(x) __tg_real(rint, (x))
+#define rlim64_t rlim_t
+#define rlimit64 rlimit
 #define round(x) __tg_real(round, (x))
 #define roundup(n,d) (howmany(n,d)*(d))
 #define rr_cksum rr_hdr.icmp6_cksum
@@ -6592,6 +6652,7 @@
 #define scalbn(x,y) __tg_real_2_1(scalbn, (x), (y))
 #define scandir64 scandir
 #define setbit(x,i) __bitop(x,i,|=)
+#define setrlimit64 setrlimit
 #define si_addr __si_fields.__sigfault.si_addr
 #define si_addr_lsb __si_fields.__sigfault.si_addr_lsb
 #define si_arch __si_fields.__sigsys.si_arch
@@ -6623,6 +6684,7 @@
 #define st_ctime st_ctim.tv_sec
 #define st_mtime st_mtim.tv_sec
 #define stat64 stat
+#define statfs64 statfs
 #define static_assert _Static_assert
 #define statvfs64 statvfs
 #define stderr (stderr)

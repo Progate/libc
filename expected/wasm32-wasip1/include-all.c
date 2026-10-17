@@ -142,6 +142,7 @@
 #include <sys/eventfd.h>
 #include <sys/fcntl.h>
 #include <sys/file.h>
+#include <sys/inotify.h>
 #include <sys/ioctl.h>
 #include <sys/param.h>
 #include <sys/poll.h>
@@ -150,6 +151,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/statvfs.h>
 #include <sys/stropts.h>
 #include <sys/syscall.h>
@@ -163,6 +165,7 @@
 #include <sys/uio.h>
 #include <sys/un.h>
 #include <sys/utsname.h>
+#include <sys/vfs.h>
 #include <sys/wait.h>
 #include <syscall.h>
 #include <sysexits.h>

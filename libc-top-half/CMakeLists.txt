@@ -178,6 +178,12 @@ if(WASI STREQUAL "p1")
     musl/include/termios.h
     musl/include/sys/wait.h
     musl/include/wait.h
+    # inotify(7)（カーネルの inotify_init1・inotify_add_watch・inotify_rm_watch。→ browseros/inotify.c）
+    musl/include/sys/inotify.h
+    # statfs(2)（カーネルの statfs64・fstatfs64。→ browseros/resource.c）
+    musl/arch/generic/bits/statfs.h
+    musl/include/sys/statfs.h
+    musl/include/sys/vfs.h
   )
 endif()
 

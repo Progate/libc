@@ -278,21 +278,6 @@ int scandir(const char *path, struct dirent ***namelist, int (*filter)(const str
   return scandirat(AT_FDCWD, path, namelist, filter, compar);
 }
 
-/// statvfs(3)。カーネルはまだ statfs(2) を持たない（ENOSYS。wasi-libc と同じ）
-int statvfs(const char *restrict path, struct statvfs *restrict buf) {
-  (void)path;
-  (void)buf;
-  errno = ENOSYS;
-  return -1;
-}
-
-int fstatvfs(int fd, struct statvfs *buf) {
-  (void)fd;
-  (void)buf;
-  errno = ENOSYS;
-  return -1;
-}
-
 /// posix_fadvise(3)。先読みの助言は受け取るだけで、効き目は無い（Linux と同じく、開いていなければ EBADF、パイプなら
 /// ESPIPE、知らない助言なら EINVAL）。失敗は errno ではなく戻り値で返す
 int posix_fadvise(int fd, off_t offset, off_t length, int advice) {

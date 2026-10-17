@@ -241,25 +241,16 @@ int getentropy(void *buffer, size_t length) {
   return r < 0 ? ret(r) : 0;
 }
 
-// ディレクトリの読み出し（opendir は paths.c）。カーネルの getdents64(2) で struct linux_dirent64 の並びを受け取り、
-// この libc の struct dirent（d_ino・d_type・d_name）に写す（d_type は Linux と同じ値）。位置は読んだ項目の数で、telldir・seekdir はそれを使う
-// （musl の src/dirent と同じ作り）
-
-struct linux_dirent64 {
-  uint64_t d_ino;
-  int64_t d_off;
-  unsigned short d_reclen;
-  unsigned char d_type;
-  char d_name[];
-};
+// ディレクトリの読み出し（opendir は paths.c）。カーネルの getdents64(2) で struct linux_dirent64 の並びを受け取る。
+// この libc の struct dirent は Linux（riscv32）と同じ並び（d_ino・d_off・d_reclen・d_type・d_name）なので、読んだ領域を
+// そのまま返す。位置は d_off で、telldir・seekdir はそれを使う（musl の src/dirent と同じ作り）
 
 struct _DIR {
   int fd;
   long tell;
   int buf_pos;
   int buf_end;
-  char buf[2048];
-  struct dirent *dirent;
+  _Alignas(8) char buf[2048];
 };
 
 DIR *fdopendir(int fd) {
@@ -273,11 +264,6 @@ DIR *fdopendir(int fd) {
   DIR *dir = calloc(1, sizeof *dir);
   if (!dir)
     return 0;
-  dir->dirent = malloc(sizeof(struct dirent) + NAME_MAX + 1);
-  if (!dir->dirent) {
-    free(dir);
-    return 0;
-  }
   dir->fd = fd;
   fcntl(fd, F_SETFD, FD_CLOEXEC);
   return dir;
@@ -294,14 +280,10 @@ struct dirent *readdir(DIR *dir) {
     dir->buf_end = length;
     dir->buf_pos = 0;
   }
-  struct linux_dirent64 *raw = (void *)(dir->buf + dir->buf_pos);
-  dir->buf_pos += raw->d_reclen;
-  dir->tell = raw->d_off;
-  dir->dirent->d_ino = raw->d_ino;
-  dir->dirent->d_type = raw->d_type;
-  strncpy(dir->dirent->d_name, raw->d_name, NAME_MAX);
-  dir->dirent->d_name[NAME_MAX] = '\0';
-  return dir->dirent;
+  struct dirent *entry = (void *)(dir->buf + dir->buf_pos);
+  dir->buf_pos += entry->d_reclen;
+  dir->tell = entry->d_off;
+  return entry;
 }
 
 int readdir_r(DIR *restrict dir, struct dirent *restrict entry, struct dirent **restrict result) {
@@ -313,7 +295,7 @@ int readdir_r(DIR *restrict dir, struct dirent *restrict entry, struct dirent **
   if (error)
     return error;
   if (found)
-    memcpy(entry, found, sizeof *found + strlen(found->d_name) + 1);
+    memcpy(entry, found, found->d_reclen);
   *result = found ? entry : 0;
   return 0;
 }
@@ -333,7 +315,6 @@ int dirfd(DIR *dir) { return dir->fd; }
 /// ディレクトリの流れを閉じ、fd は残して返す（wasi-libc の口）
 int fdclosedir(DIR *dir) {
   int fd = dir->fd;
-  free(dir->dirent);
   free(dir);
   return fd;
 }
@@ -358,7 +339,7 @@ int __wasilibc_nocwd_scandirat(int fd, const char *path, struct dirent ***nameli
         goto failed;
       list = grown;
     }
-    size_t size = sizeof *entry + strlen(entry->d_name) + 1;
+    size_t size = entry->d_reclen;
     list[count] = malloc(size);
     if (!list[count])
       goto failed;

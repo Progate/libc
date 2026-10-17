@@ -14,6 +14,7 @@ __aio_close
 __asctime_r
 __assert_fail
 __browseros_broken_pipe
+__browseros_clone_child
 __browseros_creation_mode
 __browseros_handled_count
 __browseros_memory_sync
@@ -38,6 +39,7 @@ __c_locale
 __clock
 __clock_gettime
 __clock_nanosleep
+__clone
 __copy_tls
 __cos
 __cosdf
@@ -880,6 +882,7 @@ fsetpos
 fsetpos64
 fstat
 fstatat
+fstatfs
 fstatvfs
 fsync
 ftell
@@ -963,6 +966,7 @@ getpwnam
 getpwnam_r
 getpwuid
 getpwuid_r
+getrlimit
 getrusage
 getservbyname
 getservbyname_r
@@ -1030,6 +1034,10 @@ inet_ntoa
 inet_ntop
 inet_pton
 initstate
+inotify_add_watch
+inotify_init
+inotify_init1
+inotify_rm_watch
 insque
 ioctl
 iprintf
@@ -1276,6 +1284,7 @@ ppoll
 pread
 preadv
 printf
+prlimit
 program_invocation_name
 program_invocation_short_name
 pselect
@@ -1478,6 +1487,7 @@ setpgid
 setpgrp
 setprotoent
 setpwent
+setrlimit
 setservent
 setsid
 setsockopt
@@ -1536,6 +1546,7 @@ srand48
 srandom
 sscanf
 stat
+statfs
 statvfs
 stderr
 stdin
@@ -1677,6 +1688,7 @@ vasprintf
 vdprintf
 versionsort
 versionsort64
+vfork
 vfprintf
 vfscanf
 vfwprintf
