@@ -3,15 +3,16 @@
 #include "fork_impl.h"
 
 static FILE *ofl_head;
-DECLARE_STRONG_LOCK(ofl_lock, static);
+static volatile int ofl_lock[1];
+volatile int *const __stdio_ofl_lockptr = ofl_lock;
 
 FILE **__ofl_lock()
 {
-	STRONG_LOCK(ofl_lock);
+	LOCK(ofl_lock);
 	return &ofl_head;
 }
 
 void __ofl_unlock()
 {
-	STRONG_UNLOCK(ofl_lock);
+	UNLOCK(ofl_lock);
 }

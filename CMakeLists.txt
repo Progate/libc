@@ -1,447 +1,327 @@
-cmake_minimum_required(VERSION 3.26)
+# BrowserOS の libc: musl（libc-top-half/musl）を wasm32 の arch（arch/wasm32・src/*/wasm32・crt/wasm32）で組む。
+#
+# ソースの選び方は musl の Makefile と同じ: src/*/*.c と src/malloc/mallocng/*.c を全部組み、
+# src/<dir>/wasm32/ に同じ名前のものがあればそちらに置き換える。カーネルを呼ぶのは arch の syscall の入口
+# （src/internal/wasm32/syscall.c）だけで、カーネルは @progate/browser-os の Linux の syscall の入口。
+#
+#   cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=<wasi-sdk>/bin/clang -DTARGET_TRIPLE=wasm32-wasip1
+#   ninja -C build && ninja -C build check-symbols
+#
+# 出口は build/sysroot/{include,lib,share}/<target>。
 
-# Give access to our `./cmake` local folder for `include(...)`.
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+cmake_minimum_required(VERSION 3.20)
 
-# Use `--format=gnu` to generate identical archives regardless of the host.
 set(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> --format=gnu qc <TARGET> <OBJECTS>")
-
-# If no `CMAKE_BUILD_TYPE` was specified, default to `Release`.
-if(NOT CMAKE_BUILD_TYPE)
-  message(STATUS "Setting build type to 'Release' as none was specified.")
-  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type to use" FORCE)
-endif()
-
-# Force a cross-compile to WASI at all times.
-set(CMAKE_SYSTEM_NAME WASI)
-
-# I'm not entirely sure why this is necessary on Windows. This may be a bug in
-# CMake, I'm not sure. The problem is that, at least on CI, CMake detects that
-# the compiler in use is clang but doesn't understand the `SYSTEM` header
-# option meaning it just pass `-I...` instead of
-# `-isystem ...`. This in turn causes the build to fail for... somewhat
-# unknown reasons which may also be bugs in wasi-libc. Setting this seems
-# to work around the issue however.
-if (CMAKE_HOST_WIN32)
-  set(CMAKE_INCLUDE_SYSTEM_FLAG_C "-isystem ")
-endif()
-
-set(TARGET_TRIPLE "wasm32-wasip1" CACHE STRING "WASI target to test")
-set(CMAKE_C_COMPILER_TARGET ${TARGET_TRIPLE})
-
-# We're building libc, and the compiler being used may not have a wasm sysroot
-# for libc, so skip this check. Otherwise the `project` call below attempts a
-# link to see if the compiler is working and if that fails it doesn't mean it
-# doesn't work. Let the build keep going to see what happens.
 set(CMAKE_C_COMPILER_WORKS 1)
-
-project(wasi-libc LANGUAGES C ASM)
-
-if(NOT CMAKE_C_COMPILER_ID MATCHES Clang)
-  message(FATAL_ERROR "C compiler ${CMAKE_C_COMPILER} is not `Clang`, it is ${CMAKE_C_COMPILER_ID}")
+set(CMAKE_ASM_COMPILER_WORKS 1)
+set(CMAKE_SYSTEM_NAME Generic)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
-message(STATUS "Found executable for `nm`: ${CMAKE_NM}")
-message(STATUS "Found executable for `ar`: ${CMAKE_AR}")
-message(STATUS "Found executable for `ranlib`: ${CMAKE_RANLIB}")
+set(TARGET_TRIPLE "wasm32-wasip1" CACHE STRING "wasm32-wasip1 か wasm32-wasip1-threads")
+set(BUILTINS_LIB "" CACHE FILEPATH "libc.so のリンクに使う compiler-rt（libclang_rt.builtins.a）")
+set(CMAKE_C_COMPILER_TARGET ${TARGET_TRIPLE})
+set(CMAKE_ASM_COMPILER_TARGET ${TARGET_TRIPLE})
 
-# Note: thin LTO here is just for experimentation. It has known issues:
-# - https://github.com/llvm/llvm-project/issues/91700
-# - https://github.com/llvm/llvm-project/issues/91711
-set(LTO "" CACHE STRING "LTO mode to use")
-set(MALLOC "dlmalloc" CACHE STRING "Malloc implementation to use (dlmalloc, emmalloc, or none)")
-set(BUILTINS_LIB "" CACHE STRING "Path to precompiled compiler-rt builtins library")
-set(BULK_MEMORY_THRESHOLD "32" CACHE STRING "Threshold to compile code with")
-option(SETJMP "Build setjmp/longjmp support" ON)
-option(BUILD_TESTS "Whether or not to build tests" OFF)
-option(SIMD "Whether or not to build simd-enabled intrinsics into wasi-libc" OFF)
-option(BUILD_SHARED "Whether or not to build shared libraries" ON)
-option(CHECK_SYMBOLS "Whether or not to check the exported symbols of libc.a" OFF)
-set(WASI_SDK_VERSION "" CACHE STRING "Version information for wasi-sdk to embed in headers")
-option(ENABLE_WERROR "Whether to compile with `-Werror`" OFF)
-option(ENABLE_COOP_THREADS "Whether to compile with cooperative threads support" OFF)
+project(browseros-libc LANGUAGES C ASM)
 
 if(TARGET_TRIPLE MATCHES "-threads$")
-  set(WASI p1)
-  # TODO: As of this writing, wasi_thread_start.s uses non-position-independent
-  # code, and I'm not sure how to make it position-independent.  Once we've
-  # done that, we can enable libc.so for the wasi-threads build.
-  set(SHARED OFF)
-elseif(TARGET_TRIPLE MATCHES "-wasi$")
-  set(WASI p1)
-  set(SHARED ON)
-elseif(TARGET_TRIPLE MATCHES "-wasip1$")
-  set(WASI p1)
-  set(SHARED ON)
-elseif(TARGET_TRIPLE MATCHES "-wasip2$")
-  set(WASI p2)
-  set(SHARED ON)
-elseif(TARGET_TRIPLE MATCHES "-wasip3$")
-  set(WASI p3)
-  set(SHARED ON)
+  set(THREADS ON)
+elseif(TARGET_TRIPLE MATCHES "^wasm32-wasip1$")
+  set(THREADS OFF)
 else()
-  message(FATAL_ERROR "Unknown WASI target triple: ${TARGET_TRIPLE}")
+  message(FATAL_ERROR "知らないターゲット: ${TARGET_TRIPLE}")
 endif()
 
-if(BUILD_SHARED)
-  if (NOT SHARED)
-    message(WARNING "Disabling shared library builds as target is incompatible with shared libs")
-  endif()
-else()
-  if (SHARED)
-    message(STATUS "Disabling shared library builds as BUILD_SHARED=OFF")
-  endif()
-  set(SHARED OFF)
-endif()
-
-if(TARGET_TRIPLE MATCHES "-threads$")
-  add_compile_options(-mthread-model posix -pthread -ftls-model=local-exec -matomics)
-elseif(ENABLE_COOP_THREADS)
-  add_compile_options(-mthread-model posix -pthread -ftls-model=local-exec)
-else()
-  add_compile_options(-mthread-model single)
-endif()
-
-if(MALLOC STREQUAL "dlmalloc")
-  message(STATUS "Using dlmalloc as the malloc implementation")
-  set(malloc_target dlmalloc)
-elseif(MALLOC STREQUAL "emmalloc")
-  message(STATUS "Using emmalloc as the malloc implementation")
-  set(malloc_target emmalloc)
-elseif(MALLOC STREQUAL "none")
-  message(STATUS "Using nothing as the malloc implementation")
-else()
-  message(FATAL_ERROR "Unsupported malloc implementation: ${MALLOC}")
-endif()
-
-execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
-                OUTPUT_VARIABLE clang_version
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(SYSROOT ${CMAKE_CURRENT_BINARY_DIR}/sysroot)
+set(MUSL ${CMAKE_SOURCE_DIR}/libc-top-half/musl)
+set(GEN ${CMAKE_BINARY_DIR}/gen)
+set(SYSROOT ${CMAKE_BINARY_DIR}/sysroot)
 set(SYSROOT_INC ${SYSROOT}/include/${TARGET_TRIPLE})
 set(SYSROOT_LIB ${SYSROOT}/lib/${TARGET_TRIPLE})
+set(SYSROOT_SHARE ${SYSROOT}/share/${TARGET_TRIPLE})
 
-add_custom_target(sysroot ALL)
-add_custom_target(sysroot_inc)
-
-if(LTO)
-  message(STATUS "Enabling LTO: ${LTO}")
-  set(SYSROOT_LIB ${SYSROOT_LIB}/llvm-lto/${clang_version})
-  if(LTO STREQUAL "thin")
-    add_compile_options(-flto=thin)
-    add_link_options(-flto=thin)
-  elseif(LTO STREQUAL "full")
-    add_compile_options(-flto)
-    add_link_options(-flto)
-  else()
-    message(FATAL_ERROR "Unknown LTO mode: ${LTO}")
-  endif()
-endif()
-
-if(SIMD)
-  add_compile_options(-msimd128 -mrelaxed-simd -mbulk-memory
-    -D__wasilibc_simd_string)
-endif()
-
-if(WASI STREQUAL "p1")
-  set(__wasip1__ ON)
-elseif(WASI STREQUAL "p2")
-  set(__wasip2__ ON)
-elseif(WASI STREQUAL "p3")
-  set(__wasip3__ ON)
-else()
-  message(FATAL_ERROR "Unknown WASI version: ${WASI}")
-endif()
-
-set(wasip2-version 0.2.12)
-set(wasip3-version 0.3.0)
+find_program(LLVM_AR NAMES llvm-ar HINTS ${CMAKE_C_COMPILER}/.. REQUIRED)
+find_program(LLVM_NM NAMES llvm-nm HINTS ${CMAKE_C_COMPILER}/.. REQUIRED)
+set(CMAKE_AR ${LLVM_AR})
+set(CMAKE_NM ${LLVM_NM})
 
 # =============================================================================
-# Detection of a libcall thread context for wasip3
+# 生成するヘッダー（musl の Makefile の obj/include/bits と obj/src/internal/version.h）
 
-include(CheckSourceCompiles)
-set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-check_source_compiles(C [[
-  #ifndef __wasm_libcall_thread_context__
-  #error "missing define"
-  #endif
-]] HAVE_WASM_LIBCALL_THREAD_CONTEXT)
-
-if(ENABLE_COOP_THREADS)
-  if(NOT WASI STREQUAL "p3")
-    message(FATAL_ERROR "Cooperative threads are only supported on WASIp3")
-  endif()
-  if (NOT HAVE_WASM_LIBCALL_THREAD_CONTEXT)
-    message(FATAL_ERROR "Cooperative threads require clang 23 or later")
-  endif()
-  set(__wasi_cooperative_threads__ ON)
-else()
-endif()
-
-include(bindings)
-include(builtins)
-if (NOT (WASI STREQUAL "p1"))
-  include(wasm-component-ld)
-endif()
-include(check-symbols)
-include(clang-format)
-include(wasm-tools)
-include(wasi-wits)
+file(MAKE_DIRECTORY ${GEN}/include/bits ${GEN}/src/internal)
+add_custom_command(
+  OUTPUT ${GEN}/include/bits/alltypes.h
+  COMMAND sed -f ${MUSL}/tools/mkalltypes.sed ${MUSL}/arch/wasm32/bits/alltypes.h.in ${MUSL}/include/alltypes.h.in > ${GEN}/include/bits/alltypes.h
+  DEPENDS ${MUSL}/arch/wasm32/bits/alltypes.h.in ${MUSL}/include/alltypes.h.in ${MUSL}/tools/mkalltypes.sed)
+add_custom_command(
+  OUTPUT ${GEN}/include/bits/syscall.h
+  COMMAND cp ${MUSL}/arch/wasm32/bits/syscall.h.in ${GEN}/include/bits/syscall.h
+  COMMAND sed -n -e s/__NR_/SYS_/p < ${MUSL}/arch/wasm32/bits/syscall.h.in >> ${GEN}/include/bits/syscall.h
+  DEPENDS ${MUSL}/arch/wasm32/bits/syscall.h.in)
+file(READ ${MUSL}/VERSION musl_version)
+string(STRIP "${musl_version}" musl_version)
+file(WRITE ${GEN}/src/internal/version.h "#define VERSION \"${musl_version}\"\n")
+add_custom_target(generated-headers DEPENDS ${GEN}/include/bits/alltypes.h ${GEN}/include/bits/syscall.h)
 
 # =============================================================================
-# Generic top-level build flags/settings
-#
-add_compile_options(--target=${TARGET_TRIPLE})
+# 組み立ての引数
 
-add_link_options(
+set(common_flags
   --target=${TARGET_TRIPLE}
-  --sysroot=${SYSROOT}
-
-  # By default clang will try to find, locate, and link compiler-rt. To get
-  # this to work a `-resource-dir` argument is passed to ensure that our
-  # custom `tmp_resource_dir` built here locally is used instead of the system
-  # directory which may or may not already have compiler-rt for wasm.
-  -resource-dir ${tmp_resource_dir}
-)
-
-# Expose the public headers to the implementation. We use `-isystem` for
-# purpose for two reasons:
-#
-# 1. It only does `<...>` not `"...."` lookup. We are making a libc,
-#    which is a system library, so all public headers should be
-#    accessible via `<...>` and never also need `"..."`. `-isystem` main
-#    purpose is to only effect `<...>` lookup.
-#
-# 2. The `-I` for private headers added for specific C files below
-#    should come earlier in the search path, so they can "override"
-#    and/or `#include_next` the public headers. `-isystem` (like
-#    `-idirafter`) comes later in the search path than `-I`.
-# add_compile_options(-isystem ${SYSROOT_INC})
-include_directories(SYSTEM ${SYSROOT_INC})
-
-include_directories(libc-bottom-half/cloudlibc/src)
-
-
-add_compile_options(
-  # WebAssembly floating-point match doesn't trap.
-  # TODO: Add -fno-signaling-nans when the compiler supports it.
-  -fno-trapping-math
-
-  # Add all warnings. Note that third-party code is compiled with extra flags
-  # to disable warnings that crop up.
-  -Wall -Wextra
-
-  # Compiling assembly flags lots of arguments as unused but that's not too
-  # interesting so just ignore that.
-  $<$<COMPILE_LANGUAGE:ASM>:-Wno-unused-command-line-argument>
-)
-
-if (ENABLE_WERROR)
-  add_compile_options(-Werror)
+  -std=c99 -ffreestanding -nostdinc
+  -frounding-math -fno-strict-aliasing -fno-trapping-math
+  -ffunction-sections -fdata-sections
+  -fno-unwind-tables -fno-asynchronous-unwind-tables
+  -D_XOPEN_SOURCE=700
+  -O2
+  -Wno-parentheses -Wno-shift-op-parentheses -Wno-bitwise-op-parentheses
+  -Wno-logical-op-parentheses -Wno-string-plus-int -Wno-dangling-else
+  -Wno-unknown-pragmas -Wno-unused-command-line-argument -Wno-ignored-attributes)
+if(THREADS)
+  list(APPEND common_flags -pthread -matomics -mbulk-memory -mthread-model posix -ftls-model=local-exec)
+else()
+  list(APPEND common_flags -mthread-model single)
 endif()
 
-set(WASILIBC_MULTITHREADING OFF)
-if (ENABLE_COOP_THREADS OR TARGET_TRIPLE MATCHES "-threads")
-  set(WASILIBC_MULTITHREADING ON)
-endif()
-
-# In wasip2/wasip3 code we're using `defer { ... }`, so make sure that exists.
-include(CheckCCompilerFlag)
-check_c_compiler_flag(-fdefer-ts HAVE_FDEFER_TS)
-if(HAVE_FDEFER_TS)
-  add_compile_options(-fdefer-ts)
-elseif(NOT WASI STREQUAL "p1")
-  message(FATAL_ERROR "wasip2/wasip3 require clang 22 or later for `-fdefer-ts`")
-endif()
+set(musl_includes
+  ${MUSL}/arch/wasm32 ${MUSL}/arch/generic ${GEN}/src/internal ${MUSL}/src/include ${MUSL}/src/internal
+  ${GEN}/include ${MUSL}/include)
 
 # =============================================================================
-# Helper functions for adding libraries.
+# ソース（musl の Makefile と同じ選び方）
 
-# Helper to add the `src` file to the sysroot at `dst`. Adds to the `sysroot_inc`
-# list of dependencies.
-function(add_sysroot_header src dst)
-  string(REPLACE "/" "_" target_name ${dst})
-  add_custom_command(
-    OUTPUT ${SYSROOT_INC}/${dst}
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_SOURCE_DIR}/${src}
-      ${SYSROOT_INC}/${dst}
-    DEPENDS ${src}
-  )
-  add_custom_target(sysroot-header-${target_name} DEPENDS ${SYSROOT_INC}/${dst})
-  add_dependencies(sysroot_inc sysroot-header-${target_name})
-  clang_format_file(${src})
-endfunction()
+file(GLOB base_sources ${MUSL}/src/*/*.c ${MUSL}/src/malloc/mallocng/*.c)
+file(GLOB arch_sources ${MUSL}/src/*/wasm32/*.c ${MUSL}/src/*/wasm32/*.s ${MUSL}/src/*/wasm32/*.S)
+foreach(arch_source IN LISTS arch_sources)
+  get_filename_component(dir ${arch_source} DIRECTORY)
+  get_filename_component(dir ${dir} DIRECTORY)
+  get_filename_component(stem ${arch_source} NAME_WE)
+  list(FILTER base_sources EXCLUDE REGEX "^${dir}/${stem}\\.c$")
+endforeach()
+set(sources ${base_sources} ${arch_sources})
 
-# Adds two object libraries named `${name}-{shared,static}` and hook them up to
-# the sysroot. The `*-shared` library is compiled with `-fPIC`.
-function(add_object_library name)
-  add_library(${name}-shared OBJECT EXCLUDE_FROM_ALL ${ARGN})
-  set_pic(${name}-shared)
-  target_compile_options(${name}-shared PRIVATE -fvisibility=default)
-  add_dependencies(${name}-shared sysroot_inc)
-  clang_format_target(${name}-shared)
+# fork と _Fork は -lbrowseros-fork に分ける（→ src/process/wasm32/fork_data.c）
+set(fork_sources
+  ${MUSL}/src/process/fork.c ${MUSL}/src/process/_Fork.c ${MUSL}/src/process/vfork.c
+  ${MUSL}/src/process/wasm32/fork_data.c)
+list(REMOVE_ITEM sources ${fork_sources})
+# setjmp と longjmp は wasm の例外で作る -lsetjmp（-mllvm -wasm-enable-sjlj で組んだプログラムが使う）
+file(GLOB setjmp_sources ${MUSL}/src/setjmp/wasm32/*)
+list(REMOVE_ITEM sources ${setjmp_sources})
+# スレッドの入口はスレッド版だけ
+if(NOT THREADS)
+  list(REMOVE_ITEM sources ${MUSL}/src/thread/wasm32/wasi_thread_start.s)
+endif()
+list(SORT sources)
 
-  add_library(${name}-static OBJECT EXCLUDE_FROM_ALL ${ARGN})
-  add_dependencies(${name}-static sysroot_inc)
-endfunction()
+set(softfloat_dir ${CMAKE_SOURCE_DIR}/softfloat)
+set(softfloat_names
+  bf16_to_f32.c
+  f128_add.c f128_div.c f128_mul.c f128_sqrt.c f128_sub.c
+  f128_to_f16.c f128_to_f32.c f128_to_f64.c
+  f16_add.c f16_div.c f16_mul.c f16_sqrt.c f16_sub.c
+  f32_add.c f32_div.c f32_mul.c f32_sqrt.c f32_sub.c
+  f32_to_bf16.c f32_to_f16.c
+  f64_add.c f64_div.c f64_mul.c f64_sqrt.c f64_sub.c
+  f64_to_f16.c f64_to_f32.c
+  s_addMagsF128.c s_addMagsF16.c s_addMagsF32.c s_addMagsF64.c
+  s_approxRecipSqrt32_1.c s_approxRecipSqrt_1Ks.c
+  s_normRoundPackToF128.c s_normRoundPackToF32.c s_normRoundPackToF64.c
+  s_normSubnormalF128Sig.c s_normSubnormalF16Sig.c s_normSubnormalF32Sig.c
+  s_normSubnormalF64Sig.c
+  s_roundPackToBF16.c s_roundPackToF128.c s_roundPackToF16.c
+  s_roundPackToF32.c s_roundPackToF64.c
+  s_shiftRightJam128.c s_shiftRightJam128Extra.c
+  s_subMagsF128.c s_subMagsF16.c s_subMagsF32.c s_subMagsF64.c
+  softfloat_state.c
+  8086-SSE/s_bf16UIToCommonNaN.c 8086-SSE/s_commonNaNToBF16UI.c
+  8086-SSE/s_commonNaNToF16UI.c 8086-SSE/s_commonNaNToF32UI.c
+  8086-SSE/s_commonNaNToF64UI.c 8086-SSE/s_f128UIToCommonNaN.c
+  8086-SSE/s_f32UIToCommonNaN.c 8086-SSE/s_f64UIToCommonNaN.c
+  8086-SSE/s_propagateNaNF128UI.c 8086-SSE/s_propagateNaNF16UI.c
+  8086-SSE/s_propagateNaNF32UI.c 8086-SSE/s_propagateNaNF64UI.c
+  8086-SSE/softfloat_raiseFlags.c)
+list(TRANSFORM softfloat_names PREPEND ${softfloat_dir}/berkeley-softfloat-3/source/ OUTPUT_VARIABLE softfloat_sources)
+list(APPEND softfloat_sources ${softfloat_dir}/fenv-raise.c)
 
-# Same as `add_object_library`, but also adds dependencies on
-# `musl-top-half-interface` for compiler flags and include dirs.
-function(add_internal_object_library name)
-  add_object_library(${name} ${ARGN})
-  target_link_libraries(${name}-shared PUBLIC musl-top-half-interface)
-  target_link_libraries(${name}-static PUBLIC musl-top-half-interface)
-endfunction()
+set(fts_sources ${CMAKE_SOURCE_DIR}/fts/musl-fts/fts.c)
 
-# Adds a shared library `name` with the following arguments as the
-# sources.
-#
-# Adds a dependnecy on `musl-top-half-interface` for compiler flags,
-# `sysroot-c` and `builtins` to ensure link-time dependencies are met,
-# and then ensures compile options are configured.
-function(add_internal_shared_library name)
-  add_library(${name} SHARED EXCLUDE_FROM_ALL ${ARGN})
-  set_pic(${name})
-  target_link_libraries(${name} PUBLIC musl-top-half-interface)
-  add_dependencies(${name} sysroot-c builtins sysroot-empty-pthread)
-  target_compile_options(${name} PRIVATE -fvisibility=default)
-  set_target_properties(${name} PROPERTIES NO_SONAME 1)
-  clang_format_target(${name})
-endfunction()
+# =============================================================================
+# オブジェクト
 
-# Adds `${name}` and `${name}-static.
-#
-# Wrapper around `add_internal_shared_library` and then adding
-# a static library as well.
-function(add_internal_library_pair name)
-  add_internal_shared_library(${name} ${ARGN})
-
-  add_library(${name}-static STATIC EXCLUDE_FROM_ALL ${ARGN})
-  target_link_libraries(${name}-static PUBLIC musl-top-half-interface)
-endfunction()
-
-# Helper to add `target`, a cmake library target, to the sysroot at `file`.
-#
-# Copies the output into place and adds it to the top-level `sysroot`
-# target.
-function(sysroot_lib target file)
-  set(dst ${SYSROOT_LIB}/${file})
-  add_custom_command(
-    OUTPUT ${dst}
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${target}> ${dst}
-    DEPENDS ${target}
-  )
-  add_custom_target(sysroot-${target} DEPENDS ${dst})
-  if (NOT (${file} MATCHES "\\.so$") OR SHARED)
-    add_dependencies(sysroot sysroot-${target})
+function(musl_objects name pic)
+  add_library(${name} OBJECT EXCLUDE_FROM_ALL ${ARGN})
+  add_dependencies(${name} generated-headers)
+  target_compile_options(${name} PRIVATE ${common_flags})
+  target_include_directories(${name} PRIVATE ${musl_includes})
+  if(pic)
+    target_compile_options(${name} PRIVATE -fPIC)
   endif()
 endfunction()
 
-function(set_pic target)
-  set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
-  # Windows needs an extra nudge to pass `-fPIC`
-  if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
-    target_compile_options(${target} PRIVATE -fPIC)
+function(softfloat_objects name pic)
+  add_library(${name} OBJECT EXCLUDE_FROM_ALL ${softfloat_sources})
+  add_dependencies(${name} generated-headers)
+  target_compile_options(${name} PRIVATE ${common_flags}
+    -include ${softfloat_dir}/names.h
+    -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare -Wno-implicit-fallthrough -Wno-unused-label)
+  target_compile_definitions(${name} PRIVATE
+    SOFTFLOAT_FAST_INT64 INLINE_LEVEL=5 SOFTFLOAT_FAST_DIV32TO16 SOFTFLOAT_FAST_DIV64TO32)
+  target_include_directories(${name} PRIVATE
+    ${softfloat_dir} ${softfloat_dir}/berkeley-softfloat-3/source/include ${softfloat_dir}/berkeley-softfloat-3/source/8086-SSE
+    ${GEN}/include ${MUSL}/arch/wasm32 ${MUSL}/arch/generic ${MUSL}/include)
+  if(pic)
+    target_compile_options(${name} PRIVATE -fPIC)
   endif()
 endfunction()
 
-# =============================================================================
-# subdirectories
-#
+function(fts_objects name pic)
+  add_library(${name} OBJECT EXCLUDE_FROM_ALL ${fts_sources})
+  add_dependencies(${name} generated-headers)
+  target_compile_options(${name} PRIVATE ${common_flags} -std=gnu99 -Wno-unused-parameter -Wno-unused-variable)
+  target_include_directories(${name} PRIVATE
+    ${CMAKE_SOURCE_DIR}/fts ${CMAKE_SOURCE_DIR}/fts/musl-fts
+    ${GEN}/include ${MUSL}/arch/wasm32 ${MUSL}/arch/generic ${MUSL}/include)
+  if(pic)
+    target_compile_options(${name} PRIVATE -fPIC)
+  endif()
+endfunction()
 
-add_subdirectory(dlmalloc)
-add_subdirectory(emmalloc)
-add_subdirectory(fts)
-add_subdirectory(softfloat)
-add_subdirectory(libc-bottom-half)
-add_subdirectory(libc-top-half)
+musl_objects(libc-static OFF ${sources})
+softfloat_objects(softfloat-static OFF)
+fts_objects(fts-static OFF)
+musl_objects(fork-static OFF ${fork_sources})
+musl_objects(setjmp-static OFF ${setjmp_sources})
+target_compile_options(setjmp-static PRIVATE -mllvm -wasm-enable-sjlj -mexception-handling)
 
-if (BUILD_TESTS)
-  add_subdirectory(test)
-endif()
+add_library(c STATIC $<TARGET_OBJECTS:libc-static> $<TARGET_OBJECTS:softfloat-static> $<TARGET_OBJECTS:fts-static>)
+add_library(browseros-fork STATIC $<TARGET_OBJECTS:fork-static>)
+add_library(setjmp STATIC $<TARGET_OBJECTS:setjmp-static>)
+set_target_properties(c browseros-fork setjmp PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${SYSROOT_LIB})
 
-#==============================================================================
-# libc.{a,so}
-#
+# crt1.o（crt1-command.o も同じもの）と crt1-reactor.o
+foreach(crt crt1 crt1-reactor)
+  add_library(${crt}-object OBJECT ${MUSL}/crt/wasm32/${crt}.c)
+  add_dependencies(${crt}-object generated-headers)
+  target_compile_options(${crt}-object PRIVATE ${common_flags} -DCRT)
+  target_include_directories(${crt}-object PRIVATE ${musl_includes})
+endforeach()
+add_custom_command(
+  OUTPUT ${SYSROOT_LIB}/crt1.o ${SYSROOT_LIB}/crt1-command.o ${SYSROOT_LIB}/crt1-reactor.o
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB}
+  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-object> ${SYSROOT_LIB}/crt1.o
+  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-object> ${SYSROOT_LIB}/crt1-command.o
+  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-reactor-object> ${SYSROOT_LIB}/crt1-reactor.o
+  DEPENDS crt1-object crt1-reactor-object $<TARGET_OBJECTS:crt1-object> $<TARGET_OBJECTS:crt1-reactor-object>
+  COMMAND_EXPAND_LISTS)
+add_custom_target(crt ALL DEPENDS ${SYSROOT_LIB}/crt1.o ${SYSROOT_LIB}/crt1-command.o ${SYSROOT_LIB}/crt1-reactor.o)
 
-# TODO: if this `*.o` file is added to the `bottom-half-*` object libraries it
-# doesn't make its way to the linker. I don't know if that's a bug in cmake or
-# me not understanding cmake. This should ideally be bottom-half logic but it's
-# here since I can't figure out anything else that works for now.
-if (WASI STREQUAL "p2")
-  set(libc_extra_objects libc-bottom-half/sources/wasip2_component_type.o)
-elseif (WASI STREQUAL "p3")
-  set(libc_extra_objects libc-bottom-half/sources/wasip3_component_type.o)
-endif()
-
-add_library(c SHARED EXCLUDE_FROM_ALL
-  $<TARGET_OBJECTS:bottom-half-shared>
-  $<TARGET_OBJECTS:top-half-shared>
-  $<TARGET_OBJECTS:printscan-longdouble-shared>
-  $<TARGET_OBJECTS:${malloc_target}-shared>
-  $<TARGET_OBJECTS:bulk-memory-shared>
-  $<TARGET_OBJECTS:fts-shared>
-  $<TARGET_OBJECTS:softfloat-shared>
-  ${libc_extra_objects}
-)
-add_library(c-static STATIC EXCLUDE_FROM_ALL
-  $<TARGET_OBJECTS:bottom-half-static>
-  $<TARGET_OBJECTS:top-half-static>
-  $<TARGET_OBJECTS:printscan-default-static>
-  $<TARGET_OBJECTS:${malloc_target}-static>
-  $<TARGET_OBJECTS:bulk-memory-static>
-  $<TARGET_OBJECTS:fts-static>
-  $<TARGET_OBJECTS:softfloat-static>
-  ${libc_extra_objects}
-)
-add_dependencies(c sysroot-startup-objects builtins)
-
-target_link_options(c PRIVATE
-  # Note: libc.so is special because it shouldn't link to libc.so, and the
-  # -nodefaultlibs flag here disables the default `-lc` logic that clang has.
-  # Note though that this also disables linking of compiler-rt libraries so
-  # that is explicitly passed in via `${builtins_lib_path}`
-  -nodefaultlibs
-  ${builtins_lib_path}
-
-  # Note: --allow-undefined-file=linker-provided-symbols.txt is a workaround
-  # for https://github.com/llvm/llvm-project/issues/103592
-  -Wl,--allow-undefined-file=${CMAKE_CURRENT_SOURCE_DIR}/linker-provided-symbols.txt
-)
-
-# TODO: Specify SDK version, e.g. libc.so.wasi-sdk-21, as SO_NAME once `wasm-ld`
-# supports it.
-set_target_properties(c PROPERTIES NO_SONAME 1)
-
-sysroot_lib(c-static libc.a)
-sysroot_lib(c libc.so)
-
-# =============================================================================
-# Empty archives in the sysroot to satisfy `-l` flags
-
-function(empty_sysroot_archive file)
-  set(dst ${SYSROOT_LIB}/lib${file}.a)
+# 空のライブラリ（musl は libc.a に全部を持つ。-lm などを付けて組むプログラムのため）
+set(empty_libs m rt pthread crypt util xnet resolv dl c-printscan-long-double c-printscan-no-floating-point
+  wasi-emulated-getpid wasi-emulated-mman wasi-emulated-process-clocks wasi-emulated-signal)
+set(empty_outputs)
+foreach(lib IN LISTS empty_libs)
+  list(APPEND empty_outputs ${SYSROOT_LIB}/lib${lib}.a)
   add_custom_command(
-    OUTPUT ${dst}
+    OUTPUT ${SYSROOT_LIB}/lib${lib}.a
     COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB}
-    COMMAND ${CMAKE_AR} crs ${dst}
-  )
-  add_custom_target(sysroot-empty-${file} DEPENDS ${dst})
-  add_dependencies(sysroot sysroot-empty-${file})
-endfunction()
+    COMMAND ${CMAKE_COMMAND} -E rm -f ${SYSROOT_LIB}/lib${lib}.a
+    COMMAND ${LLVM_AR} --format=gnu crs ${SYSROOT_LIB}/lib${lib}.a)
+endforeach()
+add_custom_target(empty-libs ALL DEPENDS ${empty_outputs})
 
-empty_sysroot_archive(crypt)
-empty_sysroot_archive(m)
-empty_sysroot_archive(pthread)
-empty_sysroot_archive(resolv)
-empty_sysroot_archive(rt)
-empty_sysroot_archive(util)
-empty_sysroot_archive(xnet)
+# 共有ライブラリ（1 本の版だけ。スレッド版の共有メモリでは共有ライブラリを組めない）
+if(NOT THREADS)
+  musl_objects(libc-shared ON ${sources})
+  target_compile_options(libc-shared PRIVATE -fvisibility=default)
+  softfloat_objects(softfloat-shared ON)
+  fts_objects(fts-shared ON)
+  musl_objects(fork-shared ON ${fork_sources})
+  musl_objects(setjmp-shared ON ${setjmp_sources})
+  target_compile_options(setjmp-shared PRIVATE -mllvm -wasm-enable-sjlj -mexception-handling)
+  set(shared_link --target=${TARGET_TRIPLE} -shared -nostdlib -Wl,--experimental-pic -Wl,--no-entry)
+  function(shared_library output flags)
+    add_custom_command(
+      OUTPUT ${SYSROOT_LIB}/${output}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB}
+      COMMAND ${CMAKE_C_COMPILER} ${shared_link} ${flags} -o ${SYSROOT_LIB}/${output} ${ARGN}
+      DEPENDS ${ARGN}
+      COMMAND_EXPAND_LISTS)
+  endfunction()
+  # libc.so は副モジュールのリンクの相手（NEEDED と名前の一覧）で、読み込まれない（→ @progate/browser-dyld）。
+  # fork・setjmp を使う関数の名前は、使う側のライブラリから引く
+  shared_library(libc.so "-Wl,--unresolved-symbols=import-dynamic"
+    $<TARGET_OBJECTS:libc-shared> $<TARGET_OBJECTS:softfloat-shared> $<TARGET_OBJECTS:fts-shared> ${BUILTINS_LIB})
+  shared_library(libbrowseros-fork.so "-Wl,--unresolved-symbols=import-dynamic" $<TARGET_OBJECTS:fork-shared>)
+  shared_library(libsetjmp.so "-Wl,--unresolved-symbols=import-dynamic" $<TARGET_OBJECTS:setjmp-shared>)
+  set(shared_outputs ${SYSROOT_LIB}/libc.so ${SYSROOT_LIB}/libbrowseros-fork.so ${SYSROOT_LIB}/libsetjmp.so)
+  # 中身の無い共有ライブラリは、空のオブジェクトから作る
+  file(WRITE ${GEN}/empty.c "")
+  add_library(empty-shared OBJECT EXCLUDE_FROM_ALL ${GEN}/empty.c)
+  target_compile_options(empty-shared PRIVATE --target=${TARGET_TRIPLE} -fPIC)
+  foreach(lib dl wasi-emulated-getpid wasi-emulated-mman wasi-emulated-process-clocks wasi-emulated-signal)
+    add_custom_command(
+      OUTPUT ${SYSROOT_LIB}/lib${lib}.so
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB}
+      COMMAND ${CMAKE_C_COMPILER} ${shared_link} -o ${SYSROOT_LIB}/lib${lib}.so $<TARGET_OBJECTS:empty-shared>
+      DEPENDS $<TARGET_OBJECTS:empty-shared>
+      COMMAND_EXPAND_LISTS)
+    list(APPEND shared_outputs ${SYSROOT_LIB}/lib${lib}.so)
+  endforeach()
+  add_custom_target(shared-libs ALL DEPENDS ${shared_outputs})
+endif()
 
 # =============================================================================
-# Installation
-#
-include(GNUInstallDirs)
-install(DIRECTORY ${SYSROOT}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(DIRECTORY ${SYSROOT}/lib/ DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# ヘッダー（musl の include と、arch/generic/bits を arch/wasm32/bits で上書きしたもの）
+
+file(GLOB_RECURSE public_headers RELATIVE ${MUSL}/include ${MUSL}/include/*.h)
+file(GLOB generic_bits RELATIVE ${MUSL}/arch/generic/bits ${MUSL}/arch/generic/bits/*.h)
+file(GLOB arch_bits RELATIVE ${MUSL}/arch/wasm32/bits ${MUSL}/arch/wasm32/bits/*.h)
+set(header_outputs)
+function(install_header source destination)
+  add_custom_command(
+    OUTPUT ${SYSROOT_INC}/${destination}
+    COMMAND ${CMAKE_COMMAND} -E copy ${source} ${SYSROOT_INC}/${destination}
+    DEPENDS ${source})
+  set(header_outputs ${header_outputs} ${SYSROOT_INC}/${destination} PARENT_SCOPE)
+endfunction()
+foreach(header IN LISTS public_headers)
+  install_header(${MUSL}/include/${header} ${header})
+endforeach()
+foreach(header IN LISTS generic_bits)
+  if(NOT header IN_LIST arch_bits)
+    install_header(${MUSL}/arch/generic/bits/${header} bits/${header})
+  endif()
+endforeach()
+foreach(header IN LISTS arch_bits)
+  install_header(${MUSL}/arch/wasm32/bits/${header} bits/${header})
+endforeach()
+install_header(${GEN}/include/bits/alltypes.h bits/alltypes.h)
+install_header(${GEN}/include/bits/syscall.h bits/syscall.h)
+install_header(${CMAKE_SOURCE_DIR}/fts/musl-fts/fts.h fts.h)
+add_custom_target(headers ALL DEPENDS ${header_outputs})
+add_dependencies(c headers)
+
+# =============================================================================
+# 公開している記号・ヘッダー・マクロが expected/ と同じか
+
+add_custom_command(
+  OUTPUT ${SYSROOT_SHARE}/defined-symbols.txt ${SYSROOT_SHARE}/undefined-symbols.txt
+         ${SYSROOT_SHARE}/include-all.c ${SYSROOT_SHARE}/predefined-macros.txt
+  COMMAND ${CMAKE_COMMAND}
+    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+    -DTARGET_TRIPLE=${TARGET_TRIPLE}
+    -DTHREADS=${THREADS}
+    -DSYSROOT_LIB=${SYSROOT_LIB}
+    -DSYSROOT_INC=${SYSROOT_INC}
+    -DCMAKE_NM=${LLVM_NM}
+    -DOUT_DIR=${SYSROOT_SHARE}
+    -P ${CMAKE_SOURCE_DIR}/cmake/run-check-symbols.cmake
+  DEPENDS c browseros-fork setjmp crt empty-libs headers ${CMAKE_SOURCE_DIR}/cmake/run-check-symbols.cmake)
+add_custom_target(check-symbols
+  COMMAND diff -wur ${CMAKE_SOURCE_DIR}/expected/${TARGET_TRIPLE} ${SYSROOT_SHARE}
+  DEPENDS ${SYSROOT_SHARE}/defined-symbols.txt ${SYSROOT_SHARE}/predefined-macros.txt)
+add_custom_target(update-symbols
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${SYSROOT_SHARE} ${CMAKE_SOURCE_DIR}/expected/${TARGET_TRIPLE}
+  DEPENDS ${SYSROOT_SHARE}/defined-symbols.txt ${SYSROOT_SHARE}/predefined-macros.txt)

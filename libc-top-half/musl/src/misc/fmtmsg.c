@@ -7,9 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 #include <pthread.h>
-#endif
 
 /*
  * If lstr is the first part of bstr, check that the next char in bstr
@@ -33,9 +31,7 @@ int fmtmsg(long classification, const char *label, int severity,
 	};
 	int cs;
 
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
-#endif
 
 	if (severity == MM_HALT) errstring = "HALT: ";
 	else if (severity == MM_ERROR) errstring = "ERROR: ";
@@ -88,9 +84,7 @@ int fmtmsg(long classification, const char *label, int severity,
 	if ((ret & (MM_NOCON|MM_NOMSG)) == (MM_NOCON|MM_NOMSG))
 		ret = MM_NOTOK;
 
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
 	pthread_setcancelstate(cs, 0);
-#endif
 
 	return ret;
 }

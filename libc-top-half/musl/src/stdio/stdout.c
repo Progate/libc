@@ -12,9 +12,7 @@ hidden FILE __stdout_FILE = {
 	.write = __stdout_write,
 	.seek = __stdio_seek,
 	.close = __stdio_close,
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
-	.lock = __STDIO_LOCK_INIT,
-#endif
+	.lock = -1,
 };
 FILE *const stdout = &__stdout_FILE;
 FILE *volatile __stdout_used = &__stdout_FILE;

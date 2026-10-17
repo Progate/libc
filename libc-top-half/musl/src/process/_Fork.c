@@ -26,6 +26,12 @@ void __post_Fork(int ret)
 	if (!ret) __aio_atfork(1);
 }
 
+/* clone の fork の形が使う asyncify の書き出し先（同じライブラリの wasm32/fork_data.c）。syscall.c 側の参照は
+ * 弱いのでリンクには残らず、ここ（fork(2)・_Fork(2) が必ず通る）から強く参照して取り込む。取り込めなければ
+ * fork の形の clone は ENOSYS を返す（→ src/internal/wasm32/syscall.c） */
+void *__browseros_fork_data(void);
+__attribute__((__used__)) static void *(*const keep_fork_data)(void) = __browseros_fork_data;
+
 pid_t _Fork(void)
 {
 	pid_t ret;

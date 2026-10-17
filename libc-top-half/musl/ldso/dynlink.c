@@ -347,6 +347,35 @@ static struct symdef find_sym(struct dso *dso, const char *s, int need_def)
 	return find_sym2(dso, s, need_def, 0);
 }
 
+static struct symdef get_lfs64(const char *name)
+{
+	const char *p;
+	static const char lfs64_list[] =
+		"aio_cancel\0aio_error\0aio_fsync\0aio_read\0aio_return\0"
+		"aio_suspend\0aio_write\0alphasort\0creat\0fallocate\0"
+		"fgetpos\0fopen\0freopen\0fseeko\0fsetpos\0fstat\0"
+		"fstatat\0fstatfs\0fstatvfs\0ftello\0ftruncate\0ftw\0"
+		"getdents\0getrlimit\0glob\0globfree\0lio_listio\0"
+		"lockf\0lseek\0lstat\0mkostemp\0mkostemps\0mkstemp\0"
+		"mkstemps\0mmap\0nftw\0open\0openat\0posix_fadvise\0"
+		"posix_fallocate\0pread\0preadv\0prlimit\0pwrite\0"
+		"pwritev\0readdir\0scandir\0sendfile\0setrlimit\0"
+		"stat\0statfs\0statvfs\0tmpfile\0truncate\0versionsort\0"
+		"__fxstat\0__fxstatat\0__lxstat\0__xstat\0";
+	if (!strcmp(name, "readdir64_r"))
+		return find_sym(&ldso, "readdir_r", 1);
+	size_t l = strnlen(name, 18);
+	if (l<2 || name[l-2]!='6' || name[l-1]!='4' || name[l])
+		goto nomatch;
+	for (p=lfs64_list; *p; p++) {
+		if (!strncmp(name, p, l-2) && !p[l-2])
+			return find_sym(&ldso, p, 1);
+		while (*p) p++;
+	}
+nomatch:
+	return (struct symdef){ 0 };
+}
+
 static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stride)
 {
 	unsigned char *base = dso->base;
@@ -400,6 +429,7 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 			def = (sym->st_info>>4) == STB_LOCAL
 				? (struct symdef){ .dso = dso, .sym = sym }
 				: find_sym(ctx, name, type==REL_PLT);
+			if (!def.sym) def = get_lfs64(name);
 			if (!def.sym && (sym->st_shndx != SHN_UNDEF
 			    || sym->st_info>>4 != STB_WEAK)) {
 				if (dso->lazy && (type==REL_PLT || type==REL_GOT)) {
@@ -1296,7 +1326,7 @@ static void extend_bfs_deps(struct dso *p)
 		struct dso *dep = p->deps[i];
 		for (j=cnt=0; j<dep->ndeps_direct; j++)
 			if (!dep->deps[j]->mark) cnt++;
-		tmp = no_realloc ?
+		tmp = no_realloc ? 
 			malloc(sizeof(*tmp) * (ndeps_all+cnt+1)) :
 			realloc(p->deps, sizeof(*tmp) * (ndeps_all+cnt+1));
 		if (!tmp) {
@@ -1557,7 +1587,7 @@ static void do_init_fini(struct dso **queue)
 		if (p->ctor_visitor || p->constructed)
 			continue;
 		p->ctor_visitor = self;
-
+		
 		decode_vec(p->dynv, dyn, DYN_CNT);
 		if (dyn[0] & ((1<<DT_FINI) | (1<<DT_FINI_ARRAY))) {
 			p->fini_next = fini_head;
@@ -1668,7 +1698,7 @@ static void install_new_tls(void)
  * following stage 2 and stage 3 functions via primitive symbolic lookup
  * since it does not have access to their addresses to begin with. */
 
-/* Stage 2 of the dynamic linker is called after relative relocations
+/* Stage 2 of the dynamic linker is called after relative relocations 
  * have been processed. It can make function calls to static functions
  * and access string literals and static data, but cannot use extern
  * symbols. Its job is to perform symbolic relocations on the dynamic

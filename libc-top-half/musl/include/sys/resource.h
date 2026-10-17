@@ -1,9 +1,3 @@
-#include <features.h>
-#if !defined(_WASI_EMULATED_PROCESS_CLOCKS) && !defined(__wasilibc_browseros)
-#error WASI lacks process-associated clocks; to enable emulation of the `getrusage` function using \
-the wall clock, which isn't sensitive to whether the program is running or suspended, \
-compile with -D_WASI_EMULATED_PROCESS_CLOCKS and link with -lwasi-emulated-process-clocks
-#else
 #ifndef	_SYS_RESOURCE_H
 #define	_SYS_RESOURCE_H
 
@@ -23,7 +17,6 @@ extern "C" {
 #include <bits/alltypes.h>
 #include <bits/resource.h>
 
-#ifdef __wasilibc_unmodified_upstream /* Use alternate WASI libc headers */
 typedef unsigned long long rlim_t;
 
 struct rlimit {
@@ -102,7 +95,7 @@ int prlimit(pid_t, int, const struct rlimit *, struct rlimit *);
 
 #define RLIM_NLIMITS RLIMIT_NLIMITS
 
-#if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
+#if defined(_LARGEFILE64_SOURCE)
 #define RLIM64_INFINITY RLIM_INFINITY
 #define RLIM64_SAVED_CUR RLIM_SAVED_CUR
 #define RLIM64_SAVED_MAX RLIM_SAVED_MAX
@@ -110,9 +103,6 @@ int prlimit(pid_t, int, const struct rlimit *, struct rlimit *);
 #define setrlimit64 setrlimit
 #define rlimit64 rlimit
 #define rlim64_t rlim_t
-#endif
-#else
-#include <__header_sys_resource.h>
 #endif
 
 #if _REDIR_TIME64
@@ -123,5 +113,4 @@ __REDIR(getrusage, __getrusage_time64);
 }
 #endif
 
-#endif
 #endif

@@ -1,3 +1,0 @@
-__heap_base
-__heap_end
-__c_longjmp

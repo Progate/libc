@@ -9,7 +9,6 @@ extern "C" {
 
 #include <bits/poll.h>
 
-#ifdef __wasilibc_unmodified_upstream /* Use alternate WASI libc headers */
 #define POLLIN     0x001
 #define POLLPRI    0x002
 #define POLLOUT    0x004
@@ -26,25 +25,14 @@ extern "C" {
 #define POLLMSG    0x400
 #define POLLRDHUP  0x2000
 #endif
-#else
-#include <__header_poll.h>
-#endif
 
-#ifdef __wasilibc_unmodified_upstream /* Use alternate WASI libc headers */
 typedef unsigned long nfds_t;
-#else
-#include <__typedef_nfds_t.h>
-#endif
 
-#ifdef __wasilibc_unmodified_upstream /* Use alternate WASI libc headers */
 struct pollfd {
 	int fd;
 	short events;
 	short revents;
 };
-#else
-#include <__struct_pollfd.h>
-#endif
 
 int poll (struct pollfd *, nfds_t, int);
 

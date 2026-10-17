@@ -12,9 +12,7 @@ hidden FILE __stderr_FILE = {
 	.write = __stdio_write,
 	.seek = __stdio_seek,
 	.close = __stdio_close,
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
-	.lock = __STDIO_LOCK_INIT,
-#endif
+	.lock = -1,
 };
 FILE *const stderr = &__stderr_FILE;
 FILE *volatile __stderr_used = &__stderr_FILE;

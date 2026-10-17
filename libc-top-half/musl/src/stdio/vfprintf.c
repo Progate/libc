@@ -10,10 +10,6 @@
 #include <inttypes.h>
 #include <math.h>
 #include <float.h>
-#ifdef __wasilibc_unmodified_upstream // Changes to optimize printf/scanf when long double isn't needed
-#else
-#include "printscan.h"
-#endif
 
 /* Some useful macros */
 
@@ -106,13 +102,7 @@ static const unsigned char states[]['z'-'A'+1] = {
 union arg
 {
 	uintmax_t i;
-#if !defined(__wasilibc_printscan_no_floating_point)
-#if defined(__wasilibc_printscan_no_long_double)
-	long_double f;
-#else
 	long double f;
-#endif
-#endif
 	void *p;
 };
 
@@ -135,18 +125,8 @@ static void pop_arg(union arg *arg, int type, va_list *ap)
 	break; case UMAX:	arg->i = va_arg(*ap, uintmax_t);
 	break; case PDIFF:	arg->i = va_arg(*ap, ptrdiff_t);
 	break; case UIPTR:	arg->i = (uintptr_t)va_arg(*ap, void *);
-#if defined(__wasilibc_printscan_no_floating_point)
-	break; case DBL:
-	       case LDBL:
-	floating_point_not_supported();
-#else
 	break; case DBL:	arg->f = va_arg(*ap, double);
-#if defined(__wasilibc_printscan_no_long_double)
-	break; case LDBL:	long_double_not_supported();
-#else
 	break; case LDBL:	arg->f = va_arg(*ap, long double);
-#endif
-#endif
 	}
 }
 
@@ -166,7 +146,7 @@ static void pad(FILE *f, char c, int w, int l, int fl)
 	out(f, pad, l);
 }
 
-static const char xdigits[17] = {
+static const char xdigits[16] = {
 	"0123456789ABCDEF"
 };
 
@@ -191,23 +171,14 @@ static char *fmt_u(uintmax_t x, char *s)
 	return s;
 }
 
-#if !defined(__wasilibc_printscan_no_floating_point)
 /* Do not override this check. The floating point printing code below
  * depends on the float.h constants being right. If they are wrong, it
  * may overflow the stack. */
 #if LDBL_MANT_DIG == 53
-#if defined(__wasilibc_printscan_no_long_double)
-typedef char compiler_defines_long_double_incorrectly[9-(int)sizeof(long_double)];
-#else
 typedef char compiler_defines_long_double_incorrectly[9-(int)sizeof(long double)];
 #endif
-#endif
 
-#if defined(__wasilibc_printscan_no_long_double)
-static int fmt_fp(FILE *f, long_double y, int w, int p, int fl, int t, int ps)
-#else
 static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t, int ps)
-#endif
 {
 	int max_mant_dig = (ps==BIGLPRE) ? LDBL_MANT_DIG : DBL_MANT_DIG;
 	int max_exp = (ps==BIGLPRE) ? LDBL_MAX_EXP : DBL_MAX_EXP;
@@ -347,13 +318,8 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t, int ps)
 		x = *d % i;
 		/* Are there any significant digits past j? */
 		if (x || d+1!=z) {
-#if defined(__wasilibc_printscan_no_long_double)
-			long_double round = 2/LDBL_EPSILON;
-			long_double small;
-#else
 			long double round = 2/LDBL_EPSILON;
 			long double small;
-#endif
 			if ((*d/i & 1) || (i==1000000000 && d>a && (d[-1]&1)))
 				round += 2;
 			if (x<i/2) small=0x0.8p0;
@@ -375,7 +341,7 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t, int ps)
 		if (z>d+1) z=d+1;
 	}
 	for (; z>a && !z[-1]; z--);
-
+	
 	if ((t|32)=='g') {
 		if (!p) p++;
 		if (p>e && e>=-4) {
@@ -451,7 +417,6 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t, int ps)
 
 	return MAX(w, pl+l);
 }
-#endif
 
 static int getint(char **s) {
 	int i;
@@ -656,14 +621,12 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 			pad(f, ' ', w, p, fl^LEFT_ADJ);
 			l = w>p ? w : p;
 			continue;
-#if !defined(__wasilibc_printscan_no_floating_point)
 		case 'e': case 'f': case 'g': case 'a':
 		case 'E': case 'F': case 'G': case 'A':
 			if (xp && p<0) goto overflow;
 			l = fmt_fp(f, arg.f, w, p, fl, t, ps);
 			if (l<0) goto overflow;
 			continue;
-#endif
 		}
 
 		if (p < z-a) p = z-a;

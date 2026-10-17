@@ -6,14 +6,11 @@
 #include <errno.h>
 #include <langinfo.h>
 #include <locale.h>
-#ifdef __wasilibc_unmodified_upstream // wasi-libc doesn't support catgets yet
 #include <sys/mman.h>
-#endif
 #include "libc.h"
 
 #define V(p) be32toh(*(uint32_t *)(p))
 
-#ifdef __wasilibc_unmodified_upstream // wasi-libc doesn't support catgets yet
 static nl_catd do_catopen(const char *name)
 {
 	size_t size;
@@ -27,11 +24,9 @@ static nl_catd do_catopen(const char *name)
 	}
 	return (nl_catd)map;
 }
-#endif
 
 nl_catd catopen(const char *name, int oflag)
 {
-#ifdef __wasilibc_unmodified_upstream // wasi-libc doesn't support catgets yet
 	nl_catd catd;
 
 	if (strchr(name, '/')) return do_catopen(name);
@@ -80,8 +75,5 @@ nl_catd catopen(const char *name, int oflag)
 		if (catd != (nl_catd)-1) return catd;
 	}
 	errno = ENOENT;
-#else
-	errno = EOPNOTSUPP;
-#endif
 	return (nl_catd)-1;
 }

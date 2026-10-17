@@ -11,9 +11,7 @@ hidden FILE __stdin_FILE = {
 	.read = __stdio_read,
 	.seek = __stdio_seek,
 	.close = __stdio_close,
-#if defined(__wasilibc_unmodified_upstream) || defined(_REENTRANT)
-	.lock = __STDIO_LOCK_INIT,
-#endif
+	.lock = -1,
 };
 FILE *const stdin = &__stdin_FILE;
 FILE *volatile __stdin_used = &__stdin_FILE;
