@@ -940,6 +940,8 @@ getifaddrs
 getitimer
 getline
 getloadavg
+getlogin
+getlogin_r
 getnameinfo
 getnetbyaddr
 getnetbyname

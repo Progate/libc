@@ -467,6 +467,15 @@ if (NOT (WASI STREQUAL "p1"))
   )
 endif()
 
+# BrowserOS の libc（p1）は、ログインの名前を musl のものと同じく環境変数 LOGNAME から返す（BrowserOS のカーネルはログインの
+# ときに USER と LOGNAME を置く）。Fortran のランタイム（flang-rt の GETLOG）が getlogin_r を引く
+if (WASI STREQUAL "p1")
+  list(APPEND top_half_sources
+    musl/src/unistd/getlogin.c
+    musl/src/unistd/getlogin_r.c
+  )
+endif()
+
 # BrowserOS の libc（p1）はシグナルを libc 本体に持つ。集合の操作や sigset・sighold は musl のものが
 # sigaction / sigprocmask の上にそのまま載る（→ libc-bottom-half/sources/browseros/signal.c）。
 # mkstemp などの一時ファイルも、open(O_CREAT) が mode を活かすようになったので musl のものを使う
