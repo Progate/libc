@@ -37,6 +37,7 @@
 #include <libgen.h>
 #include <libintl.h>
 #include <limits.h>
+#include <linux/futex.h>
 #include <locale.h>
 #include <malloc.h>
 #include <math.h>
