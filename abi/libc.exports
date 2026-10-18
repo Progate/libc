@@ -311,6 +311,11 @@ asinhf
 asinhl
 asinl
 asprintf
+asyncify_get_state
+asyncify_start_rewind
+asyncify_start_unwind
+asyncify_stop_rewind
+asyncify_stop_unwind
 at_quick_exit
 atan
 atan2
