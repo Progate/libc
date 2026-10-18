@@ -147,8 +147,7 @@ if(LINUX_MUSL)
     ${MUSL}/src/env/wasm32/init_libc_export.c
     ${MUSL}/src/env/wasm32/init_modules.c
     ${MUSL}/src/env/wasm32/static_tls_dyld.c
-    ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c
-    ${MUSL}/src/signal/wasm32/__browseros_signal.c)
+    ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c)
 else()
   list(REMOVE_ITEM sources ${fork_sources} ${setjmp_sources}
     ${MUSL}/src/env/wasm32/init_modules.c

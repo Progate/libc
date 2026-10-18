@@ -1,8 +1,10 @@
-/* BrowserOS: シグナルの受け口。Linux のカーネルは syscall から戻るところでハンドラのフレームを積んで飛ばすが、
- * wasm の積み重なりはカーネルから触れない。そこで syscall から戻るところでランタイムがこの export を呼び
- * （→ @progate/browser-wasi の signals.ts）、カーネルの browseros_sigdeliver（この OS が足した 1024 番）で配る
- * シグナルとハンドラのあいだのマスクを受け取ってハンドラを呼び、rt_sigreturn(2) でマスクを戻す。
- * 既定の動作（終わる・止まる）と無視はカーネルが済ませる。 */
+/* BrowserOS: シグナルの配り手。Linux のカーネルは syscall から戻るところでハンドラのフレームを積んで飛ばすが、
+ * wasm の積み重なりはカーネルから触れない。そこで積まれたシグナルがあると分かったところで
+ * （→ src/internal/wasm32/syscall.c の戻り値の上の 32 ビット）、カーネルの browseros_sigdeliver
+ * （この OS が足した 1024 番）で配るシグナルとハンドラのあいだのマスクを受け取ってハンドラを呼び、
+ * rt_sigreturn(2) でマスクを戻す。既定の動作（終わる・止まる）と無視はカーネルが済ませる。
+ * 古いプログラムの道では、ランタイムが syscall から戻るところで __browseros_signal の export を呼ぶ
+ * （→ @progate/browser-wasi の signals.ts）。その呼び出し口は __wasi__ の組にだけ残す */
 
 #include <signal.h>
 #include <string.h>
@@ -28,9 +30,10 @@ struct frame {
 	int32_t pad;
 };
 
-/* 戻り値は、EINTR で終わった syscall をやり直してよいか（走らせたハンドラがすべて SA_RESTART を持っていたか） */
-__attribute__((__export_name__("__browseros_signal")))
-int __browseros_signal(int hint)
+/* 戻り値は、EINTR で終わった syscall をやり直してよいか（走らせたハンドラがすべて SA_RESTART を持っていたか）。
+ * libc.so の道ではカーネルがハンドラの動作を持っているので、この返り値は古い道だけが読む */
+__attribute__((__visibility__("hidden")))
+int __browseros_deliver_signals(int hint)
 {
 	int saved = errno;
 	int restart = 1;
@@ -59,3 +62,12 @@ int __browseros_signal(int hint)
 	errno = saved;
 	return restart;
 }
+
+#ifdef __wasi__
+/* 古いプログラムの道の受け口（→ 頭のコメント）。どのプログラムにも残す */
+__attribute__((__export_name__("__browseros_signal")))
+int __browseros_signal(int hint)
+{
+	return __browseros_deliver_signals(hint);
+}
+#endif

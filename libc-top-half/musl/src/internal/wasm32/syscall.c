@@ -24,6 +24,9 @@ int64_t __browseros_linux_syscall(int32_t, int64_t, int64_t, int64_t, int64_t, i
  * libc.so の道ではシグナルは syscall の戻り値の上の 32 ビットで届く（→ spec.md の 9）のでこの入り口は持たない */
 int __browseros_signal(int);
 __attribute__((__used__)) static int (*const keep_signal_entry)(int) = __browseros_signal;
+#else
+/* 積まれたシグナルの配り手（→ src/signal/wasm32/__browseros_signal.c） */
+__attribute__((__visibility__("hidden"))) int __browseros_deliver_signals(int);
 #endif
 
 /* -lbrowseros-fork が持つ asyncify の書き出し先（→ src/process/wasm32/fork_data.c） */
@@ -61,7 +64,14 @@ static inline void set_stack_pointer(uintptr_t sp)
 static long call(long n, long a, long b, long c, long d, long e, long f)
 {
 	/* 数はどれも 32 ビットの long。カーネルは下の 32 ビットを読む */
-	return (long)__browseros_linux_syscall(n, a, b, c, d, e, f);
+	int64_t r = __browseros_linux_syscall(n, a, b, c, d, e, f);
+#ifndef __wasi__
+	/* シグナルが積まれているときは上の 32 ビットが立つ（→ spec.md の 9）。下の 32 ビットを結果として
+	 * 返す前にハンドラを走らせる。syscall を呼ばずに回り続ける間は届かないので、既定の動作と
+	 * SIGKILL・SIGSTOP はカーネルが届ける */
+	if ((uint64_t)r >> 32) __browseros_deliver_signals(0);
+#endif
+	return (long)r;
 }
 
 long __browseros_syscall(long n, long a, long b, long c, long d, long e, long f)
