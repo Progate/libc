@@ -4,14 +4,18 @@
 # src/<dir>/wasm32/ に同じ名前のものがあればそちらに置き換える。カーネルを呼ぶのは arch の syscall の入口
 # （src/internal/wasm32/syscall.c）だけで、カーネルは @progate/browser-os の Linux の syscall の入口。
 #
-#   cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=<wasi-sdk>/bin/clang -DTARGET_TRIPLE=wasm32-wasip1
+#   cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=<llvm>/bin/clang -DTARGET_TRIPLE=wasm32-linux-musl
 #   ninja -C build && ninja -C build check-symbols
 #
-# 出口は build/sysroot/{include,lib,share}/<target>。
+# 新しい道（wasm32-linux-musl(-threads)）の出口は build/sysroot/usr/{include,lib/<版>}。
+# 旧い道（wasm32-wasip1(-threads)）はこれまでどおり build/sysroot/{include,lib,share}/<target>。
 
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> --format=gnu qc <TARGET> <OBJECTS>")
+# s（索引）込みで作る。ホストの ranlib（macOS の BSD ranlib）は wasm のアーカイブを
+# SYMDEF だけのものに書き換えて壊すので、ranlib の段は何もしないコマンドに差し替える
+# （CMAKE_RANLIB は project() がコンパイラ情報で上書きするので、後の方で差し替える）
+set(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> --format=gnu qcs <TARGET> <OBJECTS>")
 set(CMAKE_C_COMPILER_WORKS 1)
 set(CMAKE_ASM_COMPILER_WORKS 1)
 set(CMAKE_SYSTEM_NAME Generic)
@@ -19,26 +23,44 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
-set(TARGET_TRIPLE "wasm32-wasip1" CACHE STRING "wasm32-wasip1 か wasm32-wasip1-threads")
+# TARGET_TRIPLE はコンパイルのターゲットではなく版（バリアント）の名: wasm32-linux-musl(-threads) が
+# 共有の libc.so の道（sysroot は multiarch の形）、wasm32-wasip1(-threads) はこれまでの道
+set(TARGET_TRIPLE "wasm32-wasip1" CACHE STRING "wasm32-linux-musl(-threads) か wasm32-wasip1(-threads)")
 set(BUILTINS_LIB "" CACHE FILEPATH "libc.so のリンクに使う compiler-rt（libclang_rt.builtins.a）")
-set(CMAKE_C_COMPILER_TARGET ${TARGET_TRIPLE})
-set(CMAKE_ASM_COMPILER_TARGET ${TARGET_TRIPLE})
+if(TARGET_TRIPLE MATCHES "^wasm32-linux-musl(-threads)?$")
+  set(LINUX_MUSL ON)
+  set(COMPILE_TARGET wasm32-unknown-linux-musl)
+elseif(TARGET_TRIPLE MATCHES "^wasm32-wasip1(-threads)?$")
+  set(LINUX_MUSL OFF)
+  set(COMPILE_TARGET ${TARGET_TRIPLE})
+else()
+  message(FATAL_ERROR "知らないターゲット: ${TARGET_TRIPLE}")
+endif()
+set(CMAKE_C_COMPILER_TARGET ${COMPILE_TARGET})
+set(CMAKE_ASM_COMPILER_TARGET ${COMPILE_TARGET})
 
 project(browseros-libc LANGUAGES C ASM)
 
+# project() が検出したホストの ranlib を差し替える（→ ファイル頭のコメント）
+set(CMAKE_RANLIB /usr/bin/true)
+
 if(TARGET_TRIPLE MATCHES "-threads$")
   set(THREADS ON)
-elseif(TARGET_TRIPLE MATCHES "^wasm32-wasip1$")
-  set(THREADS OFF)
 else()
-  message(FATAL_ERROR "知らないターゲット: ${TARGET_TRIPLE}")
+  set(THREADS OFF)
 endif()
 
 set(MUSL ${CMAKE_SOURCE_DIR}/libc-top-half/musl)
 set(GEN ${CMAKE_BINARY_DIR}/gen)
 set(SYSROOT ${CMAKE_BINARY_DIR}/sysroot)
-set(SYSROOT_INC ${SYSROOT}/include/${TARGET_TRIPLE})
-set(SYSROOT_LIB ${SYSROOT}/lib/${TARGET_TRIPLE})
+if(LINUX_MUSL)
+  # Linux の sysroot の形: ヘッダーは 2 版で 1 つ、ライブラリは版ごとの lib に分ける（→ spec.md の 2）
+  set(SYSROOT_INC ${SYSROOT}/usr/include)
+  set(SYSROOT_LIB ${SYSROOT}/usr/lib/${TARGET_TRIPLE})
+else()
+  set(SYSROOT_INC ${SYSROOT}/include/${TARGET_TRIPLE})
+  set(SYSROOT_LIB ${SYSROOT}/lib/${TARGET_TRIPLE})
+endif()
 set(SYSROOT_SHARE ${SYSROOT}/share/${TARGET_TRIPLE})
 
 find_program(LLVM_AR NAMES llvm-ar HINTS ${CMAKE_C_COMPILER}/.. REQUIRED)
@@ -68,7 +90,7 @@ add_custom_target(generated-headers DEPENDS ${GEN}/include/bits/alltypes.h ${GEN
 # 組み立ての引数
 
 set(common_flags
-  --target=${TARGET_TRIPLE}
+  --target=${COMPILE_TARGET}
   -std=c99 -ffreestanding -nostdinc
   -frounding-math -fno-strict-aliasing -fno-trapping-math
   -ffunction-sections -fdata-sections
@@ -82,7 +104,12 @@ set(common_flags
   -Wno-logical-op-parentheses -Wno-string-plus-int -Wno-dangling-else
   -Wno-unknown-pragmas -Wno-unused-command-line-argument -Wno-ignored-attributes)
 if(THREADS)
-  list(APPEND common_flags -pthread -matomics -mbulk-memory -mthread-model posix -ftls-model=local-exec)
+  list(APPEND common_flags -pthread -matomics -mbulk-memory -mthread-model posix)
+  if(NOT LINUX_MUSL)
+    # 旧い道は TLS の命令を local-exec に固定していた。新しい道では TLS の解決はターゲットの既定
+    # （hidden は local-exec、外に見せるものは GOT 経由）に任せる
+    list(APPEND common_flags -ftls-model=local-exec)
+  endif()
 else()
   list(APPEND common_flags -mthread-model single)
 endif()
@@ -104,14 +131,23 @@ foreach(arch_source IN LISTS arch_sources)
 endforeach()
 set(sources ${base_sources} ${arch_sources})
 
-# fork と _Fork は -lbrowseros-fork に分ける（→ src/process/wasm32/fork_data.c）
+# fork と _Fork は -lbrowseros-fork に分ける（→ src/process/wasm32/fork_data.c）。
+# setjmp と longjmp は wasm の例外で作る -lsetjmp（-mllvm -wasm-enable-sjlj で組んだプログラムが使う）。
+# どちらも新しい道（libc.so）では libc の中に戻す（→ spec.md の 4・9）
 set(fork_sources
   ${MUSL}/src/process/fork.c ${MUSL}/src/process/_Fork.c ${MUSL}/src/process/vfork.c
   ${MUSL}/src/process/wasm32/fork_data.c)
-list(REMOVE_ITEM sources ${fork_sources})
-# setjmp と longjmp は wasm の例外で作る -lsetjmp（-mllvm -wasm-enable-sjlj で組んだプログラムが使う）
 file(GLOB setjmp_sources ${MUSL}/src/setjmp/wasm32/*)
-list(REMOVE_ITEM sources ${setjmp_sources})
+if(LINUX_MUSL)
+  # 新しい道では使わない入り口。init_modules.c は共有の libc.so にだけ入れる（静的な libc.a には入らない）
+  list(REMOVE_ITEM sources
+    ${MUSL}/src/env/wasm32/init_libc_export.c
+    ${MUSL}/src/env/wasm32/init_modules.c
+    ${MUSL}/src/signal/wasm32/__browseros_signal.c)
+else()
+  list(REMOVE_ITEM sources ${fork_sources} ${setjmp_sources}
+    ${MUSL}/src/env/wasm32/init_modules.c)
+endif()
 # 名前解決とインターフェース表は BrowserOS の形に置き換える（→ src/network/wasm32/netdb.c・interfaces.c）。
 # musl のものは DNS を自分で喋る・netlink を開く前提で、この OS にはそのどちらも無い
 set(browseros_replaced_sources
@@ -203,38 +239,82 @@ endfunction()
 musl_objects(libc-static OFF ${sources})
 softfloat_objects(softfloat-static OFF)
 fts_objects(fts-static OFF)
-musl_objects(fork-static OFF ${fork_sources})
-# fork 系の ENOSYS stub（-lbrowseros-nofork。引かないと fork を残すコードがリンクに止まる → browseros/nofork.c）
-musl_objects(nofork-static OFF ${CMAKE_SOURCE_DIR}/browseros/nofork.c)
-musl_objects(setjmp-static OFF ${setjmp_sources})
-target_compile_options(setjmp-static PRIVATE -mllvm -wasm-enable-sjlj -mexception-handling)
 
 add_library(c STATIC $<TARGET_OBJECTS:libc-static> $<TARGET_OBJECTS:softfloat-static> $<TARGET_OBJECTS:fts-static>)
-add_library(browseros-fork STATIC $<TARGET_OBJECTS:fork-static>)
-add_library(browseros-nofork STATIC $<TARGET_OBJECTS:nofork-static>)
-add_library(setjmp STATIC $<TARGET_OBJECTS:setjmp-static>)
-set_target_properties(c browseros-fork browseros-nofork setjmp PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${SYSROOT_LIB})
+set(static_libs c)
+if(NOT LINUX_MUSL)
+  musl_objects(fork-static OFF ${fork_sources})
+  # fork 系の ENOSYS stub（-lbrowseros-nofork。引かないと fork を残すコードがリンクに止まる → browseros/nofork.c）
+  musl_objects(nofork-static OFF ${CMAKE_SOURCE_DIR}/browseros/nofork.c)
+  musl_objects(setjmp-static OFF ${setjmp_sources})
+  target_compile_options(setjmp-static PRIVATE -mllvm -wasm-enable-sjlj -mexception-handling)
+  add_library(browseros-fork STATIC $<TARGET_OBJECTS:fork-static>)
+  add_library(browseros-nofork STATIC $<TARGET_OBJECTS:nofork-static>)
+  add_library(setjmp STATIC $<TARGET_OBJECTS:setjmp-static>)
+  list(APPEND static_libs browseros-fork browseros-nofork setjmp)
+endif()
+set_target_properties(${static_libs} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${SYSROOT_LIB})
 
-# crt1.o（crt1-command.o も同じもの）と crt1-reactor.o
-foreach(crt crt1 crt1-reactor)
-  add_library(${crt}-object OBJECT ${MUSL}/crt/wasm32/${crt}.c)
-  add_dependencies(${crt}-object generated-headers)
-  target_compile_options(${crt}-object PRIVATE ${common_flags} -DCRT)
-  target_include_directories(${crt}-object PRIVATE ${musl_includes})
-endforeach()
-add_custom_command(
-  OUTPUT ${SYSROOT_LIB}/crt1.o ${SYSROOT_LIB}/crt1-command.o ${SYSROOT_LIB}/crt1-reactor.o
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB}
-  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-object> ${SYSROOT_LIB}/crt1.o
-  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-object> ${SYSROOT_LIB}/crt1-command.o
-  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-reactor-object> ${SYSROOT_LIB}/crt1-reactor.o
-  DEPENDS crt1-object crt1-reactor-object $<TARGET_OBJECTS:crt1-object> $<TARGET_OBJECTS:crt1-reactor-object>
-  COMMAND_EXPAND_LISTS)
-add_custom_target(crt ALL DEPENDS ${SYSROOT_LIB}/crt1.o ${SYSROOT_LIB}/crt1-command.o ${SYSROOT_LIB}/crt1-reactor.o)
+if(LINUX_MUSL)
+  # Linux のリンクの形（→ spec.md の 5.4）: 静的は crt1.o、動的な PIE は Scrt1.o + crti.o + crtn.o、
+  # 静的な PIE は rcrt1.o。Scrt1.o・rcrt1.o は crt1.c を違うフラグで組む（musl の Makefile と同じ）。
+  # Scrt1.o は __libc_start_init を持たず、libc.so がローダーの init_modules を呼ぶ方に任せる
+  set(crt_flags_crt1 -DCRT)
+  set(crt_flags_Scrt1 -DCRT -DCRT_SHARED -fPIC)
+  set(crt_flags_rcrt1 -DCRT -DCRT_STATIC_PIE -fPIC)
+  foreach(crt crt1 Scrt1 rcrt1 crti crtn)
+    if(crt MATCHES "^(Scrt1|rcrt1)$")
+      set(crt_source crt1)
+    else()
+      set(crt_source ${crt})
+    endif()
+    add_library(${crt}-object OBJECT ${MUSL}/crt/wasm32/${crt_source}.c)
+    add_dependencies(${crt}-object generated-headers)
+    target_compile_options(${crt}-object PRIVATE ${common_flags} ${crt_flags_${crt}})
+    target_include_directories(${crt}-object PRIVATE ${musl_includes})
+  endforeach()
+  add_custom_command(
+    OUTPUT ${SYSROOT_LIB}/crt1.o ${SYSROOT_LIB}/Scrt1.o ${SYSROOT_LIB}/rcrt1.o
+           ${SYSROOT_LIB}/crti.o ${SYSROOT_LIB}/crtn.o
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB}
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-object> ${SYSROOT_LIB}/crt1.o
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:Scrt1-object> ${SYSROOT_LIB}/Scrt1.o
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:rcrt1-object> ${SYSROOT_LIB}/rcrt1.o
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crti-object> ${SYSROOT_LIB}/crti.o
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crtn-object> ${SYSROOT_LIB}/crtn.o
+    DEPENDS crt1-object Scrt1-object rcrt1-object crti-object crtn-object
+    COMMAND_EXPAND_LISTS)
+  add_custom_target(crt ALL
+    DEPENDS ${SYSROOT_LIB}/crt1.o ${SYSROOT_LIB}/Scrt1.o ${SYSROOT_LIB}/rcrt1.o
+            ${SYSROOT_LIB}/crti.o ${SYSROOT_LIB}/crtn.o)
+else()
+  # crt1.o（crt1-command.o も同じもの）と crt1-reactor.o
+  foreach(crt crt1 crt1-reactor)
+    add_library(${crt}-object OBJECT ${MUSL}/crt/wasm32/${crt}.c)
+    add_dependencies(${crt}-object generated-headers)
+    target_compile_options(${crt}-object PRIVATE ${common_flags} -DCRT)
+    target_include_directories(${crt}-object PRIVATE ${musl_includes})
+  endforeach()
+  add_custom_command(
+    OUTPUT ${SYSROOT_LIB}/crt1.o ${SYSROOT_LIB}/crt1-command.o ${SYSROOT_LIB}/crt1-reactor.o
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB}
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-object> ${SYSROOT_LIB}/crt1.o
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-object> ${SYSROOT_LIB}/crt1-command.o
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:crt1-reactor-object> ${SYSROOT_LIB}/crt1-reactor.o
+    DEPENDS crt1-object crt1-reactor-object $<TARGET_OBJECTS:crt1-object> $<TARGET_OBJECTS:crt1-reactor-object>
+    COMMAND_EXPAND_LISTS)
+  add_custom_target(crt ALL DEPENDS ${SYSROOT_LIB}/crt1.o ${SYSROOT_LIB}/crt1-command.o ${SYSROOT_LIB}/crt1-reactor.o)
+endif()
 
-# 空のライブラリ（musl は libc.a に全部を持つ。-lm などを付けて組むプログラムのため）
-set(empty_libs m rt pthread crypt util xnet resolv dl c-printscan-long-double c-printscan-no-floating-point
-  wasi-emulated-getpid wasi-emulated-mman wasi-emulated-process-clocks wasi-emulated-signal)
+if(LINUX_MUSL)
+  # musl と同じ分だけ（dlopen・pthread などは libc の中にあるので、-ldl・-lpthread は空の stub。
+  # libwasi-emulated-*・libc-printscan-* のようなこの OS 特有のものは持たない）
+  set(empty_libs m pthread dl rt util xnet crypt)
+else()
+  # 空のライブラリ（musl は libc.a に全部を持つ。-lm などを付けて組むプログラムのため）
+  set(empty_libs m rt pthread crypt util xnet resolv dl c-printscan-long-double c-printscan-no-floating-point
+    wasi-emulated-getpid wasi-emulated-mman wasi-emulated-process-clocks wasi-emulated-signal)
+endif()
 set(empty_outputs)
 foreach(lib IN LISTS empty_libs)
   list(APPEND empty_outputs ${SYSROOT_LIB}/lib${lib}.a)
@@ -246,8 +326,55 @@ foreach(lib IN LISTS empty_libs)
 endforeach()
 add_custom_target(empty-libs ALL DEPENDS ${empty_outputs})
 
+if(LINUX_MUSL)
+  # libc.so がこの OS のシステム libc。読み込む側の NEEDED には -soname で書いた名が入る（→ lld の dylink）。
+  # TLS の 3 つは wasm-ld が作るシンボルなので名前ごとに export を付ける。
+  # 静的な道と同じソースを -fPIC で組み直し、ローダーの入口（init_modules.c）だけを足す
+  musl_objects(libc-shared ON ${sources} ${MUSL}/src/env/wasm32/init_modules.c)
+  target_compile_options(libc-shared PRIVATE -fvisibility=default)
+  softfloat_objects(softfloat-shared ON)
+  fts_objects(fts-shared ON)
+  if(THREADS)
+    set(abi_exports_name libc-threads.exports)
+    # スレッド版は TLS（__wasm_init_tls・__tls_size・__tls_align）を wasm-ld に作ってもらう。
+    # これらは isMultithreaded（--shared-memory）のときだけ合成される
+    set(libc_so_extra_link -Wl,--shared-memory)
+  else()
+    set(abi_exports_name libc.exports)
+    set(libc_so_extra_link "")
+  endif()
+  add_custom_command(
+    OUTPUT ${SYSROOT_LIB}/libc.so
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB} ${SYSROOT_SHARE}
+    COMMAND ${CMAKE_C_COMPILER}
+      --target=${COMPILE_TARGET} -shared -nostdlib
+      -Wl,--experimental-pic -Wl,-soname,libc.so -Wl,--no-entry
+      -Wl,--unresolved-symbols=import-dynamic ${libc_so_extra_link}
+      -Wl,--export-if-defined=__wasm_init_tls
+      -Wl,--export-if-defined=__tls_size
+      -Wl,--export-if-defined=__tls_align
+      -o ${SYSROOT_LIB}/libc.so
+      $<TARGET_OBJECTS:libc-shared> $<TARGET_OBJECTS:softfloat-shared> $<TARGET_OBJECTS:fts-shared>
+      ${BUILTINS_LIB}
+    # export の一覧は abi/ のものと毎回照らす。違ったらここで止まる（→ check-exports.cmake）
+    COMMAND ${CMAKE_COMMAND}
+      -DLIBC_SO=${SYSROOT_LIB}/libc.so
+      -DABI_FILE=${CMAKE_SOURCE_DIR}/abi/${abi_exports_name}
+      -DOUT=${GEN}/${abi_exports_name}
+      -DLLVM_NM=${LLVM_NM}
+      -P ${CMAKE_SOURCE_DIR}/cmake/check-exports.cmake
+    # abi/ の一覧は DEPENDS に入れない（最初のビルドでまだ無いので、不在時は check-exports.cmake が
+    # update-exports を案内して止まる）
+    DEPENDS libc-shared softfloat-shared fts-shared
+      ${CMAKE_SOURCE_DIR}/cmake/check-exports.cmake
+    COMMAND_EXPAND_LISTS)
+  add_custom_target(shared-libs ALL DEPENDS ${SYSROOT_LIB}/libc.so)
+  # abi/ の一覧を今の出力で書き直す（名を足すときはこの一覧を直すコミットで入れる）
+  add_custom_target(update-exports
+    COMMAND ${CMAKE_COMMAND} -E copy ${GEN}/${abi_exports_name} ${CMAKE_SOURCE_DIR}/abi/${abi_exports_name}
+    DEPENDS ${GEN}/${abi_exports_name})
 # 共有ライブラリ（1 本の版だけ。スレッド版の共有メモリでは共有ライブラリを組めない）
-if(NOT THREADS)
+elseif(NOT THREADS)
   musl_objects(libc-shared ON ${sources})
   target_compile_options(libc-shared PRIVATE -fvisibility=default)
   softfloat_objects(softfloat-shared ON)
@@ -321,19 +448,26 @@ add_dependencies(c headers)
 # =============================================================================
 # 公開している記号・ヘッダー・マクロが expected/ と同じか
 
+# 版ごとに無いターゲットもあるので依存は組み立てる
+set(check_symbols_deps c crt empty-libs headers)
+if(LINUX_MUSL)
+  list(APPEND check_symbols_deps shared-libs)
+else()
+  list(APPEND check_symbols_deps browseros-fork browseros-nofork setjmp)
+endif()
 add_custom_command(
   OUTPUT ${SYSROOT_SHARE}/defined-symbols.txt ${SYSROOT_SHARE}/undefined-symbols.txt
          ${SYSROOT_SHARE}/include-all.c ${SYSROOT_SHARE}/predefined-macros.txt
   COMMAND ${CMAKE_COMMAND}
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-    -DTARGET_TRIPLE=${TARGET_TRIPLE}
+    -DTARGET_TRIPLE=${COMPILE_TARGET}
     -DTHREADS=${THREADS}
     -DSYSROOT_LIB=${SYSROOT_LIB}
     -DSYSROOT_INC=${SYSROOT_INC}
     -DCMAKE_NM=${LLVM_NM}
     -DOUT_DIR=${SYSROOT_SHARE}
     -P ${CMAKE_SOURCE_DIR}/cmake/run-check-symbols.cmake
-  DEPENDS c browseros-fork browseros-nofork setjmp crt empty-libs headers ${CMAKE_SOURCE_DIR}/cmake/run-check-symbols.cmake)
+  DEPENDS ${check_symbols_deps} ${CMAKE_SOURCE_DIR}/cmake/run-check-symbols.cmake)
 add_custom_target(check-symbols
   COMMAND diff -wur ${CMAKE_SOURCE_DIR}/expected/${TARGET_TRIPLE} ${SYSROOT_SHARE}
   DEPENDS ${SYSROOT_SHARE}/defined-symbols.txt ${SYSROOT_SHARE}/predefined-macros.txt)

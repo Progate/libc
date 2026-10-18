@@ -13,8 +13,14 @@
 #include "atomic.h"
 #include "syscall.h"
 
+/* スレッド一覧のロックは pthread_impl.h で extern hidden 宣言の内部名。このファイルは
+ * そのヘッダを読まないので、ここで同じく hidden にしておく */
+__attribute__((__visibility__("hidden")))
 volatile int __thread_list_lock;
 
+/* libc の中だけの TLS（clone.c が新しいスレッドに置く先にも使う）。外に見せると
+ * 動的な TLS（GOT 経由）の解決が要るので hidden にしてモジュール内の local-exec に留める */
+__attribute__((__visibility__("hidden")))
 _Thread_local struct pthread __browseros_pthread_self;
 
 /* 動的に読むスレッドローカル（__tls_get_addr）は使わない。dtv は数だけ持つ */

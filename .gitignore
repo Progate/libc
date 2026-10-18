@@ -1,2 +1,4 @@
 sysroot
+sysroot-*
 build
+build-*

@@ -31,6 +31,8 @@ int64_t __browseros_linux_syscall(int32_t, int64_t, int64_t, int64_t, int64_t, i
 #define MAP_PRIVATE_ANONYMOUS 0x22
 
 void __wasm_call_ctors(void);
+/* wasm-ld が PIE に作る data 再配置（ローダーを通らない静的な PIE は自分で呼ぶ） */
+void __wasm_apply_data_relocs(void);
 int __libc_start_main(int (*)(int, char **, char **), int, char **, void (*)(), void (*)(), void (*)());
 void __init_libc(char **, char *);
 /* __init_libc は hidden なので .so からは呼べない。外から呼べる名前を libc に別名で置いてある
@@ -41,11 +43,16 @@ void __browseros_init_libc(char **, char *);
 int __main_argc_argv(int, char **) __attribute__((__weak__));
 int __main_void(void) __attribute__((__weak__));
 
-/* musl の __libc_start_init（弱い別名）の代わり。__init_libc のあとにコンストラクタを走らせる */
+/* musl の __libc_start_init（弱い別名）の代わり。__init_libc のあとにコンストラクタを走らせる。
+ * 共有の libc.so の道では、読み込んだモジュールの順を知っているローダーがコンストラクタを
+ * 走らせるので、libc.so 側の __libc_start_init（→ src/env/wasm32/init_modules.c）が勝つ。
+ * こちらは静的な道（crt1.o・rcrt1.o + libc.a）のためのもの */
+#ifndef CRT_SHARED
 void __libc_start_init(void)
 {
 	__wasm_call_ctors();
 }
+#endif
 
 static long sys(long n, long a, long b, long c, long d, long e, long f)
 {

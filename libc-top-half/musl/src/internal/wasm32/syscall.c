@@ -19,9 +19,12 @@
 __attribute__((__import_module__("browser_os_linux"), __import_name__("syscall")))
 int64_t __browseros_linux_syscall(int32_t, int64_t, int64_t, int64_t, int64_t, int64_t, int64_t);
 
-/* シグナルの受け口（→ src/signal/wasm32/__browseros_signal.c）。ランタイムが export を呼ぶので、どのプログラムにも残す */
+#ifdef __wasi__
+/* シグナルの受け口（→ src/signal/wasm32/__browseros_signal.c）。ランタイムが export を呼ぶので、どのプログラムにも残す。
+ * libc.so の道ではシグナルは syscall の戻り値の上の 32 ビットで届く（→ spec.md の 9）のでこの入り口は持たない */
 int __browseros_signal(int);
 __attribute__((__used__)) static int (*const keep_signal_entry)(int) = __browseros_signal;
+#endif
 
 /* -lbrowseros-fork が持つ asyncify の書き出し先（→ src/process/wasm32/fork_data.c） */
 extern __attribute__((__weak__)) void *__browseros_fork_data(void);
