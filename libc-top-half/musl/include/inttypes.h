@@ -25,6 +25,12 @@ uintmax_t wcstoumax(const wchar_t *__restrict, wchar_t **__restrict, int);
 #if UINTPTR_MAX == UINT64_MAX
 #define __PRI64  "l"
 #define __PRIPTR "l"
+#elif defined(__wasm32__)
+/* wasm32 の uintptr_t は unsigned long（arch/wasm32 の _Addr は clang の __UINTPTR_TYPE__ に合わせた long）。
+ * musl のほかの 32 ビットの arch の _Addr は int なので "" で合うが、wasm32 で "" にすると PRIxPTR が
+ * unsigned int の書式になり、-Wformat が uintptr_t を渡すすべての printf を咎める */
+#define __PRI64  "ll"
+#define __PRIPTR "l"
 #else
 #define __PRI64  "ll"
 #define __PRIPTR ""

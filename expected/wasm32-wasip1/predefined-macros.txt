@@ -4555,7 +4555,7 @@
 #define __POINTER_WIDTH__ 32
 #define __PRAGMA_REDEFINE_EXTNAME 1
 #define __PRI64 "ll"
-#define __PRIPTR ""
+#define __PRIPTR "l"
 #define __PTRDIFF_FMTd__ "ld"
 #define __PTRDIFF_FMTi__ "li"
 #define __PTRDIFF_TYPE__ long int
