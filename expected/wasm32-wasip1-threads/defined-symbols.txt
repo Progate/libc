@@ -21,10 +21,12 @@ __atexit_lockptr
 __block_all_sigs
 __block_app_sigs
 __browseros_clone_child
+__browseros_deliver_signals
 __browseros_fork_data
 __browseros_init_libc
 __browseros_pthread_self
 __browseros_signal
+__browseros_static_tls
 __browseros_syscall
 __browseros_thread_entry
 __bump_lockptr
