@@ -143,11 +143,13 @@ if(LINUX_MUSL)
   list(REMOVE_ITEM sources
     ${MUSL}/src/env/wasm32/init_libc_export.c
     ${MUSL}/src/env/wasm32/init_modules.c
+    ${MUSL}/src/env/wasm32/static_tls_dyld.c
     ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c
     ${MUSL}/src/signal/wasm32/__browseros_signal.c)
 else()
   list(REMOVE_ITEM sources ${fork_sources} ${setjmp_sources}
     ${MUSL}/src/env/wasm32/init_modules.c
+    ${MUSL}/src/env/wasm32/static_tls_dyld.c
     ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c)
 endif()
 # 名前解決とインターフェース表は BrowserOS の形に置き換える（→ src/network/wasm32/netdb.c・interfaces.c）。
@@ -335,6 +337,7 @@ if(LINUX_MUSL)
   # 動的ローダーへ渡す dlfcn の本体（dlfcn_dyld.c）を足す。
   # dlclose.c は静的側の stub なので共有側では外し、dlfcn_dyld.c の本体を使う
   set(shared_sources ${sources} ${MUSL}/src/env/wasm32/init_modules.c
+    ${MUSL}/src/env/wasm32/static_tls_dyld.c
     ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c)
   list(REMOVE_ITEM shared_sources ${MUSL}/src/ldso/dlclose.c)
   musl_objects(libc-shared ON ${shared_sources})
