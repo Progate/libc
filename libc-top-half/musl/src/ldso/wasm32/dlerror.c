@@ -1,10 +1,9 @@
 /*
- * 上流の src/ldso/dlerror.c をほぼそのまま移植するが、dlerror だけを弱い定義にする。
- * この OS の動的読み込みは @progate/browser-dyld が本物で受け持つ。dlerror.c の
- * オブジェクトは __dl_thread_cleanup（pthread が必ず引く）と dlerror を一緒に
- * 持っているので、dlerror が強いままだと browser-dyld の本物と衝突して
- * リンクが止まる。弱くしておけば普段はこちらの stub が答え、browser-dyld を
- * リンクしたプログラムではそちらが勝つ
+ * 上流の src/ldso/dlerror.c をほぼそのまま移植する。wasm32-wasip1 の道だけ dlerror を弱い定義にする：
+ * あちらでは動的読み込みの本物が @progate/browser-dyld（guest/dlfcn.c）にあり、このオブジェクトは
+ * __dl_thread_cleanup（pthread が必ず引く）と dlerror を一緒に持っているので、強いままだと
+ * browser-dyld の本物と衝突してリンクが止まる。wasm32-linux-musl の道では dlfcn の本体は
+ * libc.so の中（src/ldso/wasm32/dlfcn_dyld.c）なので、ここが唯一の定義でよい
  */
 #include <dlfcn.h>
 #include <stdlib.h>
@@ -18,7 +17,11 @@
 #define realloc __libc_realloc
 #define free __libc_free
 
+#if defined(__linux__)
+char *dlerror()
+#else
 __attribute__((__weak__)) char *dlerror()
+#endif
 {
 	pthread_t self = __pthread_self();
 	if (!self->dlerror_flag) return 0;
