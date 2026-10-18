@@ -57,7 +57,8 @@ static inline void set_tls_base(void *base)
 /* mem から libc.tls_size バイトに新しいスレッドの領域を作り、その struct pthread を返す */
 void *__copy_tls(unsigned char *mem)
 {
-	size_t align = __builtin_wasm_tls_align();
+	/* 動的な道では libc.tls_align はローダーの static_tls が答えた全区画の揃え（→ static_tls_dyld.c） */
+	size_t align = libc.tls_align;
 	void *current = __builtin_wasm_tls_base();
 	size_t offset = (char *)&__browseros_pthread_self - (char *)current;
 	mem += -(uintptr_t)mem & (align - 1);
@@ -77,11 +78,22 @@ void *__copy_tls(unsigned char *mem)
 }
 #endif
 
+#ifdef _REENTRANT
+/* 動的な道では静的 TLS の区画（読み込み時点の全モジュールぶん）の大きさと揃えをローダーが決める。
+ * 共有の libc.so では src/env/wasm32/static_tls_dyld.c の強い定義が browser_dyld.static_tls に
+ * 聞く。静的な libc.a ではこちらが使われ、自分のモジュールの TLS だけになる */
+__attribute__((__weak__)) __attribute__((__visibility__("hidden")))
+void __browseros_static_tls(size_t *size, size_t *align)
+{
+	*align = __builtin_wasm_tls_align();
+	*size = __builtin_wasm_tls_size() + *align;
+}
+#endif
+
 static void static_init_tls(size_t *aux)
 {
 #ifdef _REENTRANT
-	libc.tls_align = __builtin_wasm_tls_align();
-	libc.tls_size = __builtin_wasm_tls_size() + libc.tls_align;
+	__browseros_static_tls(&libc.tls_size, &libc.tls_align);
 #endif
 	libc.tls_cnt = 1;
 	pthread_t td = &__browseros_pthread_self;
