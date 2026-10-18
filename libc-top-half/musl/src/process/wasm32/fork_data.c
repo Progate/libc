@@ -15,6 +15,9 @@ static struct {
 	unsigned char stack[ASYNCIFY_DATA_BYTES];
 } data;
 
+/* asyncify の書き出し先は clone の入口（syscall.c）と _Fork.c だけが使う libc 内部のもの。
+ * .so から外に見せると GOT 経由の解決になるので hidden に留める */
+__attribute__((__visibility__("hidden")))
 void *__browseros_fork_data(void)
 {
 	data.current = data.stack;
