@@ -9,6 +9,7 @@
 	.globaltype	__stack_pointer, i32
 	.globaltype	__tls_base, i32
 	.functype	__browseros_thread_entry (i32, i32) -> ()
+	.functype	__wasm_init_tls (i32) -> ()
 
 	.hidden	wasi_thread_start
 	.globl	wasi_thread_start
@@ -21,9 +22,12 @@ wasi_thread_start:
 	i32.load	0
 	global.set	__stack_pointer
 
+	# __wasm_init_tls は __tls_base を置き、.tdata の初めの値をこのスレッドの区画へ写し、
+	# TLS の番地を差す GOT.data エントリ（__tls_base + offset）もこのインスタンスの分として
+	# 当て直す（呼ばないと __pthread_self() など GOT 経由の TLS が 0 番地を指す）
 	local.get	1
 	i32.load	4
-	global.set	__tls_base
+	call	__wasm_init_tls
 
 	local.get	0
 	local.get	1

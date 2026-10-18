@@ -47,14 +47,11 @@ int __init_tp(void *p)
 #ifdef _REENTRANT
 void __wasm_init_tls(void *);
 
-static inline void set_tls_base(void *base)
-{
-	__asm__ volatile(".globaltype __tls_base, i32\n"
-	                 "local.get %0\n"
-	                 "global.set __tls_base\n" : : "r"(base));
-}
-
-/* mem から libc.tls_size バイトに新しいスレッドの領域を作り、その struct pthread を返す */
+/* mem から libc.tls_size バイトに新しいスレッドの領域を作り、その struct pthread を返す。
+ * .tdata の中身の写しと TLS の番地を差す GOT.data エントリの再配置（__wasm_init_tls がやる
+ * 仕事）は、新しいスレッドの側の wasi_thread_start がそのスレッドのインスタンスで走らせる
+ * （→ src/thread/wasm32/wasi_thread_start.s）。こちらのインスタンスで走らせると GOT.data が
+ * 子の区画を差したまま戻ってこないので、ここでは番地の計算と dtv の口合わせだけをする */
 void *__copy_tls(unsigned char *mem)
 {
 	/* 動的な道では libc.tls_align はローダーの static_tls が答えた全区画の揃え（→ static_tls_dyld.c） */
@@ -62,9 +59,6 @@ void *__copy_tls(unsigned char *mem)
 	void *current = __builtin_wasm_tls_base();
 	size_t offset = (char *)&__browseros_pthread_self - (char *)current;
 	mem += -(uintptr_t)mem & (align - 1);
-	/* __wasm_init_tls は __tls_base も書き換えるので、このスレッドの値へ戻す */
-	__wasm_init_tls(mem);
-	set_tls_base(current);
 	pthread_t td = (pthread_t)(mem + offset);
 	td->dtv = dtv;
 	return td;
@@ -94,6 +88,12 @@ static void static_init_tls(size_t *aux)
 {
 #ifdef _REENTRANT
 	__browseros_static_tls(&libc.tls_size, &libc.tls_align);
+	/* start 関数の __wasm_init_memory は主スレッドの __tls_base と .tdata/.tbss を用意するが、
+	 * TLS の番地を差す GOT.data エントリ（__tls_base + offset への再配置）は __wasm_init_tls
+	 * の中にだけある。主スレッドの区画にも 1 度走らせないと、GOT 経由で TLS を読むコード
+	 * （__pthread_self() など）が 0 番地を指す。動的な道ではローダーが各モジュールの
+	 * __wasm_init_tls を呼ぶので、ここで当て直すのは静的な道だけで意味を持つ */
+	__wasm_init_tls(__builtin_wasm_tls_base());
 #endif
 	libc.tls_cnt = 1;
 	pthread_t td = &__browseros_pthread_self;
