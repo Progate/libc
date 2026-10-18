@@ -143,10 +143,12 @@ if(LINUX_MUSL)
   list(REMOVE_ITEM sources
     ${MUSL}/src/env/wasm32/init_libc_export.c
     ${MUSL}/src/env/wasm32/init_modules.c
+    ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c
     ${MUSL}/src/signal/wasm32/__browseros_signal.c)
 else()
   list(REMOVE_ITEM sources ${fork_sources} ${setjmp_sources}
-    ${MUSL}/src/env/wasm32/init_modules.c)
+    ${MUSL}/src/env/wasm32/init_modules.c
+    ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c)
 endif()
 # 名前解決とインターフェース表は BrowserOS の形に置き換える（→ src/network/wasm32/netdb.c・interfaces.c）。
 # musl のものは DNS を自分で喋る・netlink を開く前提で、この OS にはそのどちらも無い
@@ -329,8 +331,13 @@ add_custom_target(empty-libs ALL DEPENDS ${empty_outputs})
 if(LINUX_MUSL)
   # libc.so がこの OS のシステム libc。読み込む側の NEEDED には -soname で書いた名が入る（→ lld の dylink）。
   # TLS の 3 つは wasm-ld が作るシンボルなので名前ごとに export を付ける。
-  # 静的な道と同じソースを -fPIC で組み直し、ローダーの入口（init_modules.c）だけを足す
-  musl_objects(libc-shared ON ${sources} ${MUSL}/src/env/wasm32/init_modules.c)
+  # 静的な道と同じソースを -fPIC で組み直し、ローダーの入口（init_modules.c）と
+  # 動的ローダーへ渡す dlfcn の本体（dlfcn_dyld.c）を足す。
+  # dlclose.c は静的側の stub なので共有側では外し、dlfcn_dyld.c の本体を使う
+  set(shared_sources ${sources} ${MUSL}/src/env/wasm32/init_modules.c
+    ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c)
+  list(REMOVE_ITEM shared_sources ${MUSL}/src/ldso/dlclose.c)
+  musl_objects(libc-shared ON ${shared_sources})
   target_compile_options(libc-shared PRIVATE -fvisibility=default)
   softfloat_objects(softfloat-shared ON)
   fts_objects(fts-shared ON)
@@ -366,6 +373,7 @@ if(LINUX_MUSL)
     # abi/ の一覧は DEPENDS に入れない（最初のビルドでまだ無いので、不在時は check-exports.cmake が
     # update-exports を案内して止まる）
     DEPENDS libc-shared softfloat-shared fts-shared
+      $<TARGET_OBJECTS:libc-shared> $<TARGET_OBJECTS:softfloat-shared> $<TARGET_OBJECTS:fts-shared>
       ${CMAKE_SOURCE_DIR}/cmake/check-exports.cmake
     COMMAND_EXPAND_LISTS)
   add_custom_target(shared-libs ALL DEPENDS ${SYSROOT_LIB}/libc.so)
