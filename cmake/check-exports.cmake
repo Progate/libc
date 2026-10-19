@@ -27,12 +27,20 @@ endforeach()
 list(SORT exports)
 list(REMOVE_DUPLICATES exports)
 
-# 絶対に入っている入り口（fenv の wasm グローバルと wasm 例外のタグ。→ spec.md の 3・4）
-foreach(required __fe_status __c_longjmp)
+# 絶対に入っている入り口（fenv の wasm グローバル。→ spec.md の 3・4）
+foreach(required __fe_status)
   if(NOT required IN_LIST exports)
-    message(FATAL_ERROR "libc.so の export に ${required} が無い。fenv・setjmp の組み方を見直す")
+    message(FATAL_ERROR "libc.so の export に ${required} が無い。fenv の組み方を見直す")
   endif()
 endforeach()
+
+# __c_longjmp のタグは定義してはいけない（import であること）。例外の同一性は Tag の
+# インスタンスで決まるので、libc.so が自分の Tag を export すると、先に instantiate される
+# メインにローダーが配った共有 Tag とずれて、.so からの siglongjmp がメインで捕まらない。
+# 全員が env から import してローダーの配る 1 個の Tag を使う（__cpp_exception と同じ形）
+if(__c_longjmp IN_LIST exports)
+  message(FATAL_ERROR "libc.so が __c_longjmp のタグを export している。setjmp/wasm32/rt.c の __PIC__ 組み方を見直す")
+endif()
 
 string(JOIN "\n" exports_text ${exports})
 file(WRITE ${OUT} "${exports_text}\n")

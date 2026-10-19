@@ -10,7 +10,6 @@ ___environ
 __acquire_ptc
 __assert_fail
 __browseros_clone_child
-__c_longjmp
 __crypt_blowfish
 __crypt_des
 __crypt_md5

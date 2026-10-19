@@ -88,7 +88,12 @@ __wasm_longjmp(void *env, int val)
 //
 // Note that the means of defining this symbol changed historically, so this
 // is only done on LLVM 22+ where it's required.
-#if __clang_major__ >= 22
+//
+// 共有の libc.so では定義しない（__PIC__ が立つ）。タグは例外の同一性で決まるので、
+// 定義する側・import する側で別の Tag になると .so から投げた longjmp をメインが
+// catch できない。dylink では全モジュールが env から import してローダーの配る
+// 共有 Tag を使う（__cpp_exception と同じ仕組み）。
+#if __clang_major__ >= 22 && !defined(__PIC__)
 __asm__(".globl __c_longjmp\n"
 #if defined(__wasm32__)
         ".tagtype __c_longjmp i32\n"
