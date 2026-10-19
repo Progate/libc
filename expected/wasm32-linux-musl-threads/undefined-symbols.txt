@@ -4,6 +4,7 @@ __browseros_args_sizes_get
 __browseros_environ_get
 __browseros_environ_sizes_get
 __browseros_linux_syscall
+__c_longjmp
 __divtf3
 __eqtf2
 __extenddftf2
