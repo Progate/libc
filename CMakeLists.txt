@@ -414,6 +414,9 @@ if(LINUX_MUSL)
 elseif(NOT THREADS)
   musl_objects(libc-shared ON ${sources})
   target_compile_options(libc-shared PRIVATE -fvisibility=default)
+  # __fe_status を import 側にする印（musl/src/fenv/wasm32/fenv.c。wasm32 はターゲット自体が
+  # PIC なので __PIC__ では切り分けられない）
+  target_compile_definitions(libc-shared PRIVATE BROWSEROS_LIBC_SO)
   softfloat_objects(softfloat-shared ON)
   fts_objects(fts-shared ON)
   musl_objects(fork-shared ON ${fork_sources})
