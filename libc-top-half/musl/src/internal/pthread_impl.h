@@ -158,6 +158,7 @@ extern hidden void *__pthread_tsd_main[];
 extern hidden volatile int __eintr_valid_flag;
 
 hidden int __clone(int (*)(void *), void *, int, void *, ...);
+hidden volatile int *__browseros_thread_link_state(void *);
 hidden int __set_thread_area(void *);
 hidden int __libc_sigaction(int, const struct sigaction *, struct sigaction *);
 hidden void __unmapself(void *, size_t);
