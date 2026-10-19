@@ -210,6 +210,9 @@ function(musl_objects name pic)
   target_compile_options(${name} PRIVATE ${common_flags})
   target_include_directories(${name} PRIVATE ${musl_includes})
   if(pic)
+    # musl 側の shared は、中から libc 内部のデータシンボル（__libc 等）を参照しうる。
+    # データ参照は import にできない（R_WASM_MEMORY_ADDR_REL_SLEB は定義済みシンボルにしか解決
+    # できない）ので、ここでは既定のままにして各リンク側で付ける
     target_compile_options(${name} PRIVATE -fPIC)
   endif()
 endfunction()
@@ -226,7 +229,7 @@ function(softfloat_objects name pic)
     ${softfloat_dir} ${softfloat_dir}/berkeley-softfloat-3/source/include ${softfloat_dir}/berkeley-softfloat-3/source/8086-SSE
     ${GEN}/include ${MUSL}/arch/wasm32 ${MUSL}/arch/generic ${MUSL}/include)
   if(pic)
-    target_compile_options(${name} PRIVATE -fPIC)
+    target_compile_options(${name} PRIVATE -fPIC -fvisibility=default)
   endif()
 endfunction()
 
@@ -238,7 +241,7 @@ function(fts_objects name pic)
     ${CMAKE_SOURCE_DIR}/fts ${CMAKE_SOURCE_DIR}/fts/musl-fts
     ${GEN}/include ${MUSL}/arch/wasm32 ${MUSL}/arch/generic ${MUSL}/include)
   if(pic)
-    target_compile_options(${name} PRIVATE -fPIC)
+    target_compile_options(${name} PRIVATE -fPIC -fvisibility=default)
   endif()
 endfunction()
 
