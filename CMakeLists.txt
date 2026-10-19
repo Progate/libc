@@ -347,6 +347,10 @@ if(LINUX_MUSL)
   list(REMOVE_ITEM shared_sources ${MUSL}/src/ldso/dlclose.c)
   musl_objects(libc-shared ON ${shared_sources})
   target_compile_options(libc-shared PRIVATE -fvisibility=default)
+  # libc.so に入るオブジェクトであること（setjmp/wasm32/rt.c はこれで __c_longjmp の
+  # タグを定義せず import に変える。wasm32-unknown-linux-musl はターゲット自体が PIC なので
+  # __PIC__ では切り分けられない）
+  target_compile_definitions(libc-shared PRIVATE BROWSEROS_LIBC_SO)
   softfloat_objects(softfloat-shared ON)
   fts_objects(fts-shared ON)
   if(THREADS)
