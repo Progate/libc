@@ -8,8 +8,12 @@
 # 必要なもの:
 #   LIBC_SO   … 調べる libc.so
 #   ABI_FILE  … 正とする一覧（abi/libc.exports・abi/libc-threads.exports）
+
 #   OUT       … 実際の export を書き出す先（update-exports が abi/ へ写す）
 #   LLVM_NM   … llvm-nm
+#
+# cmake -P で呼ばれるので、まず IN_LIST（CMP0057）を有効にする
+cmake_policy(SET CMP0057 NEW)
 
 execute_process(
   COMMAND ${LLVM_NM} --extern-only --defined-only ${LIBC_SO}
