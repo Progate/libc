@@ -27,6 +27,7 @@ __browseros_pthread_self
 __browseros_static_tls
 __browseros_syscall
 __browseros_thread_entry
+__browseros_thread_link_state
 __bump_lockptr
 __c_dot_utf8
 __c_dot_utf8_locale

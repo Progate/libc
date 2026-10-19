@@ -68,8 +68,14 @@ static long call(long n, long a, long b, long c, long d, long e, long f)
 #ifndef __wasi__
 	/* シグナルが積まれているときは上の 32 ビットが立つ（→ spec.md の 9）。下の 32 ビットを結果として
 	 * 返す前にハンドラを走らせる。syscall を呼ばずに回り続ける間は届かないので、既定の動作と
-	 * SIGKILL・SIGSTOP はカーネルが届ける */
-	if ((uint64_t)r >> 32) __browseros_deliver_signals(0);
+	 * SIGKILL・SIGSTOP はカーネルが届ける。
+	 *
+	 * 配る側（`__browseros_deliver_signals`）が呼ぶ browseros_sigdeliver と rt_sigreturn はこの検査を
+	 * 外す。配るものがまだ残っているとこれらの戻り値にも上の 32 ビットが立つので、検査すると
+	 * `__browseros_deliver_signals` が自分の syscall で再帰的に呼ばれ続け、ブロックされた保留がある間は
+	 * 終わらない。 */
+	if (n != 1024 /* SYS_browseros_sigdeliver */ && n != SYS_rt_sigreturn &&
+	    (uint64_t)r >> 32) __browseros_deliver_signals(0);
 #endif
 	return (long)r;
 }

@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <sched.h>
+#include <string.h>
 #include "pthread_impl.h"
 #include "syscall.h"
 
@@ -48,7 +49,25 @@ struct thread_start {
 	int (*fn)(void *);
 	void *arg;
 	volatile int *ptid;
+	/* __wasm_init_tls が struct pthread のある TLS 区画ごと .tdata の初めの値で潰すので、親が組んだ
+	 * 中身をここに写して持ち越し、子が __browseros_thread_entry で戻す。一覧への登録（prev/next）は
+	 * 親が clone のあとでやるが、潰しが終わってからでないと載せた繋がりが消えるので link_state で順序を取る
+	 * （0 = 子がまだ潰し中・戻し中、1 = 戻し済み（親が登録してよい）、2 = 登録済み（子が走ってよい）） */
+	volatile int link_state;
+	struct pthread pt;
 };
+
+/* 親（__pthread_create）が子の thread_start までたどるための口。__clone がスタックの頭に置く場所と
+ * 同じ計算をする（start は子のスタックにあり、共有メモリなので親からも読み書きできる）。
+ * _REENTRANT ではない版でも __pthread_create から参照されるので外に出しておく */
+__attribute__((__visibility__("hidden")))
+volatile int *__browseros_thread_link_state(void *stack)
+{
+	uintptr_t top = (uintptr_t)stack & -16;
+	struct thread_start *start = (void *)(top - sizeof *start);
+	start = (void *)((uintptr_t)start & -16);
+	return &start->link_state;
+}
 
 #ifdef _REENTRANT
 void wasi_thread_start(int, struct thread_start *);
@@ -59,6 +78,24 @@ void __browseros_thread_entry(int tid, struct thread_start *start)
 {
 	/* 親の clone が ptid に書くより先に子が走ることがあるので、子も書く（Linux はカーネルが子を走らせる前に書く） */
 	if (start->ptid) a_store((volatile int *)start->ptid, tid);
+	pthread_t self = __pthread_self();
+	/* 直前に __wasm_init_tls が走って、struct pthread（__browseros_pthread_self。TLS 区画の中）を
+	 * 初めの値（0 埋め）に戻した。親が clone 前に組んでおいた中身（map・stack・detach_state・
+	 * robust_list・locale・canary・tsd など）を start->pt から戻す */
+	struct pthread pt = start->pt;
+	pt.self = self;
+	pt.tid = tid;
+	memcpy(self, &pt, sizeof pt);
+	/* 潰しが終わったこと（= 一覧へ載せてよいこと）を親へ知らせ、親が登録を終えるまで待つ。
+	 * 先に走って __pthread_exit へ入ると、prev/next が 0 のままの外す処理が 0 番地近辺へ書き込み、
+	 * 自分が一覧から外れない（他スレッドが一覧を回るときに永久ループになる） */
+	a_store((volatile int *)&start->link_state, 1);
+	__wake((volatile int *)&start->link_state, 1, 1);
+	for (;;) {
+		int state = start->link_state;
+		if (state == 2) break;
+		__wait((volatile int *)&start->link_state, 0, state, 1);
+	}
 	__syscall(SYS_exit, start->fn(start->arg));
 }
 #endif
@@ -98,6 +135,10 @@ int __clone(int (*fn)(void *), void *stack, int flags, void *arg, ...)
 		start->fn = fn;
 		start->arg = arg;
 		start->ptid = (flags & CLONE_PARENT_SETTID) ? ptid : 0;
+		start->link_state = 0;
+		/* 子は __wasm_init_tls が TLS 区画（struct pthread ごと）を潰してから走り始めるので、
+		 * ここまで pthread_create が組んだ new の中身を持ち越す */
+		memcpy(&start->pt, tls, sizeof start->pt);
 		return __syscall(SYS_clone, flags, start, ptid, tls, ctid);
 	}
 #endif

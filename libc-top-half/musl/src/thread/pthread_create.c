@@ -360,20 +360,31 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 	 * clean up all transient resource usage before returning. */
 	if (ret < 0) {
 		ret = -EAGAIN;
-	} else if (attr._a_sched) {
-		ret = __syscall(SYS_sched_setscheduler,
-			new->tid, attr._a_policy, &attr._a_prio);
-		if (a_swap(&args->control, ret ? 3 : 0)==2)
-			__wake(&args->control, 1, 1);
-		if (ret)
-			__wait(&args->control, 0, 3, 0);
 	}
 
 	if (ret >= 0) {
+		/* BrowserOS wasm32: 子は __wasm_init_tls が struct pthread（TLS 区画の中）を
+		 * .tdata の初めの値で潰してから、__browseros_thread_entry で写しを戻す。潰しが
+		 * 終わる前に一覧へ載せると、載せた next/prev が消えて、一覧を回る側（exit の
+		 * __pthread_key_delete・__synccall など）が死んだスレッドを永久に回るので、
+		 * 子が戻し終えるまでここで待ってから登録する（→ src/thread/wasm32/clone.c） */
+		volatile int *link_state = __browseros_thread_link_state(stack);
+		while (*link_state == 0)
+			__wait((volatile int *)link_state, 0, 0, 1);
 		new->next = self->next;
 		new->prev = self;
 		new->next->prev = new;
 		new->prev->next = new;
+		a_store((volatile int *)link_state, 2);
+		__wake((volatile int *)link_state, 1, 1);
+		if (attr._a_sched) {
+			ret = __syscall(SYS_sched_setscheduler,
+				new->tid, attr._a_policy, &attr._a_prio);
+			if (a_swap(&args->control, ret ? 3 : 0)==2)
+				__wake(&args->control, 1, 1);
+			if (ret)
+				__wait(&args->control, 0, 3, 0);
+		}
 	} else {
 		if (!--libc.threads_minus_1) libc.need_locks = 0;
 	}
