@@ -46,7 +46,6 @@ __fe_sqrt_f128
 __fe_sqrt_f16
 __fe_sqrt_f32
 __fe_sqrt_f64
-__fe_status
 __fe_sub_bf16
 __fe_sub_f128
 __fe_sub_f16

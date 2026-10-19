@@ -14,10 +14,20 @@
  * Dynamically loaded modules import the global from the program, so they all
  * share the flags of the thread.
  */
+#ifdef BROWSEROS_LIBC_SO
+/* libc.so は __fe_status をローダーの env.__fe_status から import する（wasm-ld の
+ * --unresolved-symbols=import-dynamic が未定義の global を import にする）。
+ * libc.so が自分で定義して export すると、そのシンボル表の型（DATA）が
+ * プログラム側の global 参照（GLOBAL）と wasm-ld で衝突するので、ここでは
+ * 型の宣言だけにしておく */
+__asm__(
+	".globaltype __fe_status, i32\n");
+#else
 __asm__(
 	".globaltype __fe_status, i32\n"
 	".globl __fe_status\n"
 	"__fe_status:\n");
+#endif
 
 static unsigned get_status(void)
 {

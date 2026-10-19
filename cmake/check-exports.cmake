@@ -31,12 +31,15 @@ endforeach()
 list(SORT exports)
 list(REMOVE_DUPLICATES exports)
 
-# 絶対に入っている入り口（fenv の wasm グローバル。→ spec.md の 3・4）
-foreach(required __fe_status)
-  if(NOT required IN_LIST exports)
-    message(FATAL_ERROR "libc.so の export に ${required} が無い。fenv の組み方を見直す")
-  endif()
-endforeach()
+# __fe_status（fenv の wasm グローバル）は定義・export してはいけない（import であること）。
+# wasm の浮動小数点演算ごとに LLVM が立てるフラグなので、プログラム側のオブジェクトは global の
+# 未決参照を持つ。libc.so が自分で定義して export すると、そのシンボル表の型（DATA）が参照側の
+# 型（GLOBAL）と wasm-ld で衝突し、浮動小数点を使うプログラムは -pie で結べなくなる。
+# 全員が env.__fe_status から import し、ローダーの配る 1 個の global を分け合う
+# （dyld.ts の sharedGlobalFallback。__c_longjmp と同じ形）
+if(__fe_status IN_LIST exports)
+  message(FATAL_ERROR "libc.so が __fe_status を export している。fenv/wasm32/fenv.c の BROWSEROS_LIBC_SO 組み方を見直す")
+endif()
 
 # __c_longjmp のタグは定義してはいけない（import であること）。例外の同一性は Tag の
 # インスタンスで決まるので、libc.so が自分の Tag を export すると、先に instantiate される
