@@ -39,7 +39,7 @@ endforeach()
 # メインにローダーが配った共有 Tag とずれて、.so からの siglongjmp がメインで捕まらない。
 # 全員が env から import してローダーの配る 1 個の Tag を使う（__cpp_exception と同じ形）
 if(__c_longjmp IN_LIST exports)
-  message(FATAL_ERROR "libc.so が __c_longjmp のタグを export している。setjmp/wasm32/rt.c の __PIC__ 組み方を見直す")
+  message(FATAL_ERROR "libc.so が __c_longjmp のタグを export している。setjmp/wasm32/rt.c の BROWSEROS_LIBC_SO 組み方を見直す")
 endif()
 
 string(JOIN "\n" exports_text ${exports})
