@@ -74,8 +74,14 @@ void wasi_thread_start(int, struct thread_start *);
 __attribute__((__used__)) static void *const keep_thread_start = wasi_thread_start;
 
 __attribute__((__visibility__("hidden")))
-void __browseros_thread_entry(int tid, struct thread_start *start)
+void __browseros_thread_entry(int wasi_tid, struct thread_start *start)
 {
+	/* wasi_thread_start の第 1 引数は wasi-threads の番号（プロセスごとに 1 から振るワーカーの番号）で、Linux の tid
+	 * ではない。mutex の持ち主・tkill(2)・robust list はカーネルの gettid(2) の番号で照らすので、self->tid にこれを
+	 * 置くと主スレッドの tid（= pid）と重なったスレッドがある。そのスレッドが主スレッドの持つ ERRORCHECK の mutex を
+	 * 取ると、自分が持っているとみなされて EDEADLK になり、libuv の uv_mutex_lock が abort する */
+	(void)wasi_tid;
+	int tid = __syscall(SYS_gettid);
 	/* 親の clone が ptid に書くより先に子が走ることがあるので、子も書く（Linux はカーネルが子を走らせる前に書く） */
 	if (start->ptid) a_store((volatile int *)start->ptid, tid);
 	pthread_t self = __pthread_self();
