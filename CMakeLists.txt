@@ -99,7 +99,11 @@ set(common_flags
   -ffunction-sections -fdata-sections
   # 内部の setjmp / longjmp（pthread_cleanup など）を wasm の例外へ落とす。落とさないと
   # `U setjmp` の生シンボルが残り、実体は -lsetjmp の __wasm_* にしか無いのでリンク不能になる
+  # 出る命令は新しい例外の形（try_table）に合わせる。既定（legacy の try/catch/delegate）のまま
+  # 混ぜると、try_table で組んだオブジェクトと繋いだモジュールがエンジンの検査で弾かれる
+  # （SHELL: は 2 回目の -mllvm が CMake の重複除去で消えるのを避けるため）
   -mllvm -wasm-enable-sjlj
+  SHELL:-mllvm -wasm-use-legacy-eh=false
   -fno-unwind-tables -fno-asynchronous-unwind-tables
   -D_XOPEN_SOURCE=700
   -O2
