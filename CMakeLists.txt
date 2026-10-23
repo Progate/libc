@@ -158,15 +158,6 @@ else()
     ${MUSL}/src/env/wasm32/static_tls_dyld.c
     ${MUSL}/src/ldso/wasm32/dlfcn_dyld.c)
 endif()
-# 名前解決とインターフェース表は BrowserOS の形に置き換える（→ src/network/wasm32/netdb.c・interfaces.c）。
-# musl のものは DNS を自分で喋る・netlink を開く前提で、この OS にはそのどちらも無い
-set(browseros_replaced_sources
-  ${MUSL}/src/network/getaddrinfo.c ${MUSL}/src/network/freeaddrinfo.c ${MUSL}/src/network/getnameinfo.c
-  ${MUSL}/src/network/gethostbyname.c ${MUSL}/src/network/gethostbyname2.c ${MUSL}/src/network/gethostbyname_r.c
-  ${MUSL}/src/network/gethostbyname2_r.c ${MUSL}/src/network/gethostbyaddr.c ${MUSL}/src/network/gethostbyaddr_r.c
-  ${MUSL}/src/network/getifaddrs.c ${MUSL}/src/network/if_nameindex.c ${MUSL}/src/network/if_freenameindex.c
-  ${MUSL}/src/network/if_nametoindex.c ${MUSL}/src/network/if_indextoname.c)
-list(REMOVE_ITEM sources ${browseros_replaced_sources})
 # スレッドの入口はスレッド版だけ
 if(NOT THREADS)
   list(REMOVE_ITEM sources ${MUSL}/src/thread/wasm32/wasi_thread_start.s)
