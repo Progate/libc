@@ -8,9 +8,7 @@
  * - fork の形の clone（CLONE_VM なし）: wasm は自分のスタックを写せないので、カーネルは asyncify で書き出した
  *   呼び出しの積み重なりから親と子を巻き直す。書き出し先は使わない tls の引数で渡す（-lbrowseros-fork が持つ。
  *   無ければ ENOSYS）。巻き直しでは関数の頭が飛ばされ、子の __stack_pointer は初めの値になるので、呼ぶ前の
- *   値へ書き戻す。スレッド版では __tls_base も書き戻す。主スレッド以外から fork した子は、そのスレッドを主スレッド
- *   として新しいインスタンスで巻き直すので、__tls_base は主スレッドの区画を指したままになっている（fork(2) の子に
- *   残るのは呼んだスレッドで、TLS もそのスレッドのもの）。 */
+ *   値へ書き戻す。スレッド版では TLS も当て直す（→ `restore_tls`）。 */
 
 #include <stdint.h>
 #include <signal.h>
@@ -64,11 +62,27 @@ static inline void set_stack_pointer(uintptr_t sp)
 }
 
 #ifdef _REENTRANT
-static inline void set_tls_base(void *base)
+void __wasm_init_tls(void *);
+
+/* fork の子の TLS を、呼んだスレッドの区画に当て直す。
+ *
+ * fork(2) の子に残るのは呼んだスレッドで、カーネルはそれを子の主スレッドとして新しいインスタンスで巻き直す。
+ * 巻き直しでは関数の頭が飛ばされるので、インスタンスごとに持つ 2 つが起動のときのままになる。
+ *
+ * - __tls_base。主スレッド以外から fork した子では、主スレッドの区画を指している
+ * - TLS の番地を差す GOT.data エントリ（__tls_base + offset への再配置）。wasm32-linux-musl はスレッドローカル変数の
+ *   番地をここから読むが、当てるのは __wasm_init_tls だけで、起動のとき（__init_tls.c の static_init_tls）に走る。
+ *   当て直さないと、子のスレッドローカル変数（__pthread_self() や errno）はどれも 0 番地の近くを指す
+ *
+ * __wasm_init_tls は __tls_base を置き、GOT を当て直すが、区画を .tdata の初めの値で潰すので、親から写った中身を
+ * 控えて戻す */
+static void restore_tls(void *base)
 {
-	__asm__ volatile(".globaltype __tls_base, i32\n"
-	                 "local.get %0\n"
-	                 "global.set __tls_base\n" : : "r"(base));
+	size_t size = __builtin_wasm_tls_size();
+	unsigned char saved[size];
+	memcpy(saved, base, size);
+	__wasm_init_tls(base);
+	memcpy(base, saved, size);
 }
 #endif
 
@@ -115,7 +129,7 @@ long __browseros_syscall(long n, long a, long b, long c, long d, long e, long f)
 		if (r == 0) {
 			set_stack_pointer(sp);
 #ifdef _REENTRANT
-			set_tls_base(tls);
+			restore_tls(tls);
 #endif
 		}
 		return r;
