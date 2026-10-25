@@ -8,7 +8,9 @@
  * - fork の形の clone（CLONE_VM なし）: wasm は自分のスタックを写せないので、カーネルは asyncify で書き出した
  *   呼び出しの積み重なりから親と子を巻き直す。書き出し先は使わない tls の引数で渡す（-lbrowseros-fork が持つ。
  *   無ければ ENOSYS）。巻き直しでは関数の頭が飛ばされ、子の __stack_pointer は初めの値になるので、呼ぶ前の
- *   値へ書き戻す。 */
+ *   値へ書き戻す。スレッド版では __tls_base も書き戻す。主スレッド以外から fork した子は、そのスレッドを主スレッド
+ *   として新しいインスタンスで巻き直すので、__tls_base は主スレッドの区画を指したままになっている（fork(2) の子に
+ *   残るのは呼んだスレッドで、TLS もそのスレッドのもの）。 */
 
 #include <stdint.h>
 #include <signal.h>
@@ -61,6 +63,15 @@ static inline void set_stack_pointer(uintptr_t sp)
 	                 "global.set __stack_pointer\n" : : "r"(sp));
 }
 
+#ifdef _REENTRANT
+static inline void set_tls_base(void *base)
+{
+	__asm__ volatile(".globaltype __tls_base, i32\n"
+	                 "local.get %0\n"
+	                 "global.set __tls_base\n" : : "r"(base));
+}
+#endif
+
 static long call(long n, long a, long b, long c, long d, long e, long f)
 {
 	/* 数はどれも 32 ビットの long。カーネルは下の 32 ビットを読む */
@@ -97,8 +108,16 @@ long __browseros_syscall(long n, long a, long b, long c, long d, long e, long f)
 		void *data = __browseros_fork_data ? __browseros_fork_data() : 0;
 		if (!data) return -ENOSYS;
 		uintptr_t sp = stack_pointer();
+#ifdef _REENTRANT
+		void *tls = __builtin_wasm_tls_base();
+#endif
 		long r = call(n, a, b, c, (long)data, e, f);
-		if (r == 0) set_stack_pointer(sp);
+		if (r == 0) {
+			set_stack_pointer(sp);
+#ifdef _REENTRANT
+			set_tls_base(tls);
+#endif
+		}
 		return r;
 	}
 	return call(n, a, b, c, d, e, f);
