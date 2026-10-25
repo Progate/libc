@@ -17,6 +17,7 @@ __getf2
 __gttf2
 __letf2
 __lttf2
+__main_argc_argv
 __netf2
 __subtf3
 __table_base
