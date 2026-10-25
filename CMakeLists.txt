@@ -364,7 +364,7 @@ if(LINUX_MUSL)
   file(STRINGS ${CMAKE_SOURCE_DIR}/abi/asyncify-onlylist.txt asyncify_onlylist)
   list(JOIN asyncify_onlylist "," asyncify_onlylist_arg)
   add_custom_command(
-    OUTPUT ${SYSROOT_LIB}/libc.so
+    OUTPUT ${SYSROOT_LIB}/libc.so ${SYSROOT_LIB}/libc.asyncify-onlylist
     COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB} ${SYSROOT_SHARE}
     COMMAND ${CMAKE_C_COMPILER}
       --target=${COMPILE_TARGET} -shared -nostdlib
@@ -386,6 +386,9 @@ if(LINUX_MUSL)
       --pass-arg=asyncify-onlylist@${asyncify_onlylist_arg}
       -o ${SYSROOT_LIB}/libc.so.tmp
     COMMAND ${CMAKE_COMMAND} -E rename ${SYSROOT_LIB}/libc.so.tmp ${SYSROOT_LIB}/libc.so
+    # 同じ一覧を libc.so の隣に置く。fork を呼ぶプログラムをリンクしたあとで、ドライバーがプログラムの側に asyncify を
+    # かけるとき、libc.so の中で巻き戻せる関数（の import）だけを巻き戻しの起きる import にする（spec.md の 8）
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/abi/asyncify-onlylist.txt ${SYSROOT_LIB}/libc.asyncify-onlylist
     # export の一覧は abi/ のものと毎回照らす。違ったらここで止まる（→ check-exports.cmake）
     COMMAND ${CMAKE_COMMAND}
       -DLIBC_SO=${SYSROOT_LIB}/libc.so
