@@ -11,6 +11,9 @@ static void (*const __browseros_init_libc_anchor)(char **, char *) = __browseros
 
 static int call_main(int argc, char **argv, char **envp)
 {
+#ifdef __wasi__
+	if (__main_void) return __main_void();
+#endif
 	return __main_argc_argv(argc, argv);
 }
 
