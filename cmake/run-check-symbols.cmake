@@ -117,7 +117,7 @@ foreach(header IN LISTS headers)
       # Ignore some headers that require extra options for example.
       header MATCHES "/(mman|times|signal|resource|descriptor_table).h$" OR
       # 単独では読めない（ほかのヘッダーの中から読まれる）もの
-      header MATCHES "^(alltypes|wait|syscall|sys/syscall|sys/vfs|scsi/.*|sys/user|sys/reg|sys/procfs|sys/ptrace|sys/fanotify|sys/kd|sys/vt|sys/soundcard|sys/io|sys/fsuid|sys/klog|sys/swap|sys/timex|sys/quota|sys/xattr|sys/membarrier|sys/personality|sys/prctl|sys/reboot|sys/sysmacros|sys/auxv|link|dlfcn|elf|ucontext|sys/ucontext|threads|pthread)\.h$")
+      header MATCHES "^(alltypes|wait|syscall|sys/syscall|sys/vfs|scsi/.*|sys/user|sys/reg|sys/procfs|sys/ptrace|sys/fanotify|sys/kd|sys/vt|sys/soundcard|linux/patchkey|sys/io|sys/fsuid|sys/klog|sys/swap|sys/timex|sys/quota|sys/xattr|sys/membarrier|sys/personality|sys/prctl|sys/reboot|sys/sysmacros|sys/auxv|link|dlfcn|elf|ucontext|sys/ucontext|threads|pthread)\.h$")
     continue()
   endif()
   file(APPEND ${out_include_all} "#include <${header}>\n")
