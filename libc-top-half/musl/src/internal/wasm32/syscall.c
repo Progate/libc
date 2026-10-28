@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <signal.h>
 #include <string.h>
+#include <errno.h>
 #include "syscall.h"
 #include "ksigaction.h"
 
@@ -86,23 +87,58 @@ static void restore_tls(void *base)
 }
 #endif
 
+/* SA_RESTART なら Linux がやり直す syscall の番号（riscv32 の Linux。signal(7)「Interruption of system
+ * calls」）。read・readv・write・writev・ioctl・openat・waitid・flock・fcntl64（F_SETLKW）・
+ * accept4・recvfrom・recvmsg・sendto・sendmsg。@progate/browser-wasi の signals.ts の LINUX_RESTARTABLE と
+ * 同じ表（古いプログラムの道では、そちらが代わりにやり直す。musl の waitpid・wait・wait4 は全部
+ * waitid に集まるので表には wait4 を入れない） */
+static int restartable(long n)
+{
+	switch (n) {
+	case SYS_read:
+	case SYS_readv:
+	case SYS_write:
+	case SYS_writev:
+	case SYS_ioctl:
+	case SYS_openat:
+	case SYS_waitid:
+	case SYS_flock:
+	case SYS_fcntl64:
+	case SYS_accept4:
+	case SYS_recvfrom:
+	case SYS_recvmsg:
+	case SYS_sendto:
+	case SYS_sendmsg:
+		return 1;
+	}
+	return 0;
+}
+
 static long call(long n, long a, long b, long c, long d, long e, long f)
 {
-	/* 数はどれも 32 ビットの long。カーネルは下の 32 ビットを読む */
-	int64_t r = __browseros_linux_syscall(n, a, b, c, d, e, f);
+	for (;;) {
+		/* 数はどれも 32 ビットの long。カーネルは下の 32 ビットを読む */
+		int64_t r = __browseros_linux_syscall(n, a, b, c, d, e, f);
 #ifndef __wasi__
-	/* シグナルが積まれているときは上の 32 ビットが立つ（→ spec.md の 9）。下の 32 ビットを結果として
-	 * 返す前にハンドラを走らせる。syscall を呼ばずに回り続ける間は届かないので、既定の動作と
-	 * SIGKILL・SIGSTOP はカーネルが届ける。
-	 *
-	 * 配る側（`__browseros_deliver_signals`）が呼ぶ browseros_sigdeliver と rt_sigreturn はこの検査を
-	 * 外す。配るものがまだ残っているとこれらの戻り値にも上の 32 ビットが立つので、検査すると
-	 * `__browseros_deliver_signals` が自分の syscall で再帰的に呼ばれ続け、ブロックされた保留がある間は
-	 * 終わらない。 */
-	if (n != 1024 /* SYS_browseros_sigdeliver */ && n != SYS_rt_sigreturn &&
-	    (uint64_t)r >> 32) __browseros_deliver_signals(0);
+		/* シグナルが積まれているときは上の 32 ビットが立つ（→ spec.md の 9）。下の 32 ビットを結果として
+		 * 返す前にハンドラを走らせる。syscall を呼ばずに回り続ける間は届かないので、既定の動作と
+		 * SIGKILL・SIGSTOP はカーネルが届ける。
+		 *
+		 * 配る側（`__browseros_deliver_signals`）が呼ぶ browseros_sigdeliver と rt_sigreturn はこの検査を
+		 * 外す。配るものがまだ残っているとこれらの戻り値にも上の 32 ビットが立つので、検査すると
+		 * `__browseros_deliver_signals` が自分の syscall で再帰的に呼ばれ続け、ブロックされた保留がある間は
+		 * 終わらない。
+		 *
+		 * 走らせたハンドラが全部 SA_RESTART なら、Linux は EINTR で終わった syscall をやり直す
+		 * （signal(7)）。配った答えを受けて同じ syscall を呼び直す */
+		if (n != 1024 /* SYS_browseros_sigdeliver */ && n != SYS_rt_sigreturn &&
+		    (uint64_t)r >> 32) {
+			int restart = __browseros_deliver_signals(0);
+			if (restart && (long)r == -EINTR && restartable(n)) continue;
+		}
 #endif
-	return (long)r;
+		return (long)r;
+	}
 }
 
 long __browseros_syscall(long n, long a, long b, long c, long d, long e, long f)
