@@ -360,9 +360,6 @@ if(LINUX_MUSL)
     set(abi_exports_name libc.exports)
     set(libc_so_extra_link "")
   endif()
-  # wasm-opt の asyncify-onlylist はカンマ区切りの直接指定なので、一覧ファイルからここで連結する
-  file(STRINGS ${CMAKE_SOURCE_DIR}/abi/asyncify-onlylist.txt asyncify_onlylist)
-  list(JOIN asyncify_onlylist "," asyncify_onlylist_arg)
   add_custom_command(
     OUTPUT ${SYSROOT_LIB}/libc.so ${SYSROOT_LIB}/libc.asyncify-onlylist
     COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB} ${SYSROOT_SHARE}
@@ -378,14 +375,13 @@ if(LINUX_MUSL)
       ${BUILTINS_LIB}
     # fork のために、決めた関数だけに asyncify をかけて配る（spec.md の 8）。
     # 巻き戻しの起きる import は syscall だけで、asyncify の状態はメインから import するので
-    # サイドモジュールの relocatable で組む。対象の関数は abi/asyncify-onlylist.txt
-    COMMAND ${CMAKE_COMMAND} -E env ${WASM_OPT}
-      ${SYSROOT_LIB}/libc.so --asyncify
-      --pass-arg=asyncify-imports@browser_os_linux.syscall
-      --pass-arg=asyncify-relocatable
-      --pass-arg=asyncify-onlylist@${asyncify_onlylist_arg}
-      -o ${SYSROOT_LIB}/libc.so.tmp
-    COMMAND ${CMAKE_COMMAND} -E rename ${SYSROOT_LIB}/libc.so.tmp ${SYSROOT_LIB}/libc.so
+    # サイドモジュールの relocatable で組む。対象の関数は abi/asyncify-onlylist.txt と
+    # pthread_create.c の start（→ cmake/asyncify-libc.cmake）
+    COMMAND ${CMAKE_COMMAND}
+      -DWASM_OPT=${WASM_OPT}
+      -DLIBC_SO=${SYSROOT_LIB}/libc.so
+      -DONLYLIST=${CMAKE_SOURCE_DIR}/abi/asyncify-onlylist.txt
+      -P ${CMAKE_SOURCE_DIR}/cmake/asyncify-libc.cmake
     # 同じ一覧を libc.so の隣に置く。fork を呼ぶプログラムをリンクしたあとで、ドライバーがプログラムの側に asyncify を
     # かけるとき、libc.so の中で巻き戻せる関数（の import）だけを巻き戻しの起きる import にする（spec.md の 8）
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/abi/asyncify-onlylist.txt ${SYSROOT_LIB}/libc.asyncify-onlylist
@@ -401,6 +397,7 @@ if(LINUX_MUSL)
     DEPENDS libc-shared softfloat-shared fts-shared
       $<TARGET_OBJECTS:libc-shared> $<TARGET_OBJECTS:softfloat-shared> $<TARGET_OBJECTS:fts-shared>
       ${CMAKE_SOURCE_DIR}/cmake/check-exports.cmake
+      ${CMAKE_SOURCE_DIR}/cmake/asyncify-libc.cmake
       ${CMAKE_SOURCE_DIR}/abi/asyncify-onlylist.txt
     COMMAND_EXPAND_LISTS)
   add_custom_target(shared-libs ALL DEPENDS ${SYSROOT_LIB}/libc.so)

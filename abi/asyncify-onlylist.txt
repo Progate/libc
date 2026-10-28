@@ -28,3 +28,6 @@ nftw
 ftw
 scandir
 glob
+wasi_thread_start
+__browseros_thread_entry
+start_c11
