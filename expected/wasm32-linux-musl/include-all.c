@@ -7,8 +7,10 @@
 #include <arpa/nameser_compat.h>
 #include <arpa/telnet.h>
 #include <arpa/tftp.h>
+#include <asm-generic/ioctl.h>
 #include <asm/bitsperlong.h>
 #include <asm/byteorder.h>
+#include <asm/ioctl.h>
 #include <assert.h>
 #include <byteswap.h>
 #include <complex.h>
@@ -39,9 +41,14 @@
 #include <libgen.h>
 #include <libintl.h>
 #include <limits.h>
+#include <linux/const.h>
 #include <linux/futex.h>
+#include <linux/ioctl.h>
 #include <linux/soundcard.h>
 #include <linux/types.h>
+#include <linux/v4l2-common.h>
+#include <linux/v4l2-controls.h>
+#include <linux/videodev2.h>
 #include <locale.h>
 #include <malloc.h>
 #include <math.h>
