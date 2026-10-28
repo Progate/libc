@@ -7,6 +7,8 @@
 #include <arpa/nameser_compat.h>
 #include <arpa/telnet.h>
 #include <arpa/tftp.h>
+#include <asm/bitsperlong.h>
+#include <asm/byteorder.h>
 #include <assert.h>
 #include <byteswap.h>
 #include <complex.h>
@@ -39,6 +41,7 @@
 #include <limits.h>
 #include <linux/futex.h>
 #include <linux/soundcard.h>
+#include <linux/types.h>
 #include <locale.h>
 #include <malloc.h>
 #include <math.h>
@@ -74,6 +77,7 @@
 #include <search.h>
 #include <semaphore.h>
 #include <shadow.h>
+#include <sound/asound.h>
 #include <spawn.h>
 #include <stdalign.h>
 #include <stdarg.h>
