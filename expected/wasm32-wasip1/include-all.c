@@ -51,6 +51,7 @@
 #include <linux/if_addr.h>
 #include <linux/if_ether.h>
 #include <linux/if_link.h>
+#include <linux/if_packet.h>
 #include <linux/ioctl.h>
 #include <linux/libc-compat.h>
 #include <linux/neighbour.h>
@@ -62,6 +63,7 @@
 #include <linux/types.h>
 #include <linux/v4l2-common.h>
 #include <linux/v4l2-controls.h>
+#include <linux/version.h>
 #include <linux/videodev2.h>
 #include <linux/wireless.h>
 #include <locale.h>
