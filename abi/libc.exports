@@ -240,7 +240,9 @@ __strtoumax_internal
 __strxfrm_l
 __sysv_signal
 __timezone
+__tls_align
 __tls_get_addr
+__tls_size
 __tolower_l
 __toupper_l
 __towctrans_l
@@ -252,6 +254,7 @@ __unlock
 __uselocale
 __wasm_apply_data_relocs
 __wasm_call_ctors
+__wasm_init_tls
 __wasm_longjmp
 __wasm_setjmp
 __wasm_setjmp_test
@@ -1705,6 +1708,7 @@ waitid
 waitpid
 warn
 warnx
+wasi_thread_start
 wcpcpy
 wcpncpy
 wcrtomb

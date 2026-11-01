@@ -45,6 +45,9 @@ extern int32_t __browser_dyld_module_info(uint32_t index, struct browser_dyld_mo
 __attribute__((import_module("browser_dyld"), import_name("addr_info")))
 extern int32_t __browser_dyld_addr_info(const void *addr, Dl_info *info);
 
+/* module_info でプログラム自身を問う添字（サイドモジュールの添字とは重ならない） */
+#define MAIN_MODULE_INFO UINT32_MAX
+
 /* ホストに溜まった直前の失敗を dlerror の文字列に写す。写したらホスト側は空になる */
 static void
 take_error(void)
@@ -123,7 +126,8 @@ dladdr(const void *addr, Dl_info *info)
  * 静的な libc.a では src/ldso/wasm32/dl_iterate_phdr.c の弱い定義がプログラム自身だけを答える。
  * wasm にはプログラムヘッダーが無いので `dlpi_phdr` は NULL・`dlpi_phnum` は 0 で、
  * `dlpi_addr` はモジュールのデータを置いた番地（`__memory_base`）である。
- * プログラム自身の名前は glibc と同じく空の文字列で、共有ライブラリの名前は読み込んだファイルのパスである
+ * プログラム自身の名前は glibc と同じく空の文字列で、共有ライブラリの名前は読み込んだファイルのパスである。
+ * PIE のプログラム自身の置き場と TLS はローダーしか知らないので、module_info の添字 MAIN_MODULE_INFO で引く
  */
 int
 dl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *data)
@@ -135,17 +139,17 @@ dl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *da
         .dlpi_phdr = NULL,
         .dlpi_phnum = 0,
     };
-    /* 読み込んだ数と下ろした数は、サイドモジュールが 1 つも無く -1 が返るときもホストが書く */
+    /* 読み込んだ数と下ろした数は、該当するモジュールが無く -1 が返るときもホストが書く */
     char name[PATH_MAX];
-    int32_t length = __browser_dyld_module_info(0, &module, name, sizeof(name));
+    int32_t length = __browser_dyld_module_info(MAIN_MODULE_INFO, &module, name, sizeof(name));
     info.dlpi_adds = module.adds;
     info.dlpi_subs = module.subs;
-#ifdef _REENTRANT
-    if (__builtin_wasm_tls_size() > 0) {
-        info.dlpi_tls_modid = 1;
-        info.dlpi_tls_data = __builtin_wasm_tls_base();
+    /* この添字を知らない古いローダーは -1 を返すので、プログラム自身は置き場 0・TLS 無しとして答える */
+    if (length >= 0) {
+        info.dlpi_addr = module.memory_base;
+        info.dlpi_tls_modid = module.tls_modid;
+        info.dlpi_tls_data = (void *)(uintptr_t)module.tls_data;
     }
-#endif
     int result = callback(&info, sizeof(info), data);
     for (uint32_t index = 0; result == 0; index++) {
         length = __browser_dyld_module_info(index, &module, name, sizeof(name));
