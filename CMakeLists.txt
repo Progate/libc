@@ -4,10 +4,10 @@
 # src/<dir>/wasm32/ に同じ名前のものがあればそちらに置き換える。カーネルを呼ぶのは arch の syscall の入口
 # （src/internal/wasm32/syscall.c）だけで、カーネルは @progate/browser-os の Linux の syscall の入口。
 #
-#   cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=<llvm>/bin/clang -DTARGET_TRIPLE=wasm32-linux-musl
+#   cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=<llvm>/bin/clang -DTARGET_TRIPLE=wasm32-linux-musl-threads
 #   ninja -C build && ninja -C build check-symbols
 #
-# 新しい道（wasm32-linux-musl(-threads)）の出口は build/sysroot/usr/{include,lib/<版>}。
+# 新しい道（wasm32-linux-musl-threads。世界はスレッド版の 1 本）の出口は build/sysroot/usr/{include,lib/<版>}。
 # 旧い道（wasm32-wasip1(-threads)）はこれまでどおり build/sysroot/{include,lib,share}/<target>。
 
 cmake_minimum_required(VERSION 3.20)
@@ -25,9 +25,12 @@ endif()
 
 # TARGET_TRIPLE はコンパイルのターゲットではなく版（バリアント）の名: wasm32-linux-musl(-threads) が
 # 共有の libc.so の道（sysroot は multiarch の形）、wasm32-wasip1(-threads) はこれまでの道
-set(TARGET_TRIPLE "wasm32-wasip1" CACHE STRING "wasm32-linux-musl(-threads) か wasm32-wasip1(-threads)")
+set(TARGET_TRIPLE "wasm32-wasip1" CACHE STRING "wasm32-linux-musl-threads か wasm32-wasip1(-threads)")
 set(BUILTINS_LIB "" CACHE FILEPATH "libc.so のリンクに使う compiler-rt（libclang_rt.builtins.a）")
-if(TARGET_TRIPLE MATCHES "^wasm32-linux-musl(-threads)?$")
+if(TARGET_TRIPLE STREQUAL "wasm32-linux-musl")
+  # BrowserOS の世界はいつもスレッド版（共有メモリ）の 1 本で、libc.so もその版しか配らない（→ spec.md の 1・2）
+  message(FATAL_ERROR "wasm32-linux-musl はスレッド版（wasm32-linux-musl-threads）だけを組む")
+elseif(TARGET_TRIPLE STREQUAL "wasm32-linux-musl-threads")
   set(LINUX_MUSL ON)
   set(COMPILE_TARGET wasm32-unknown-linux-musl)
 elseif(TARGET_TRIPLE MATCHES "^wasm32-wasip1(-threads)?$")
@@ -351,15 +354,11 @@ if(LINUX_MUSL)
   target_compile_definitions(libc-shared PRIVATE BROWSEROS_LIBC_SO)
   softfloat_objects(softfloat-shared ON)
   fts_objects(fts-shared ON)
-  if(THREADS)
-    set(abi_exports_name libc-threads.exports)
-    # スレッド版は TLS（__wasm_init_tls・__tls_size・__tls_align）を wasm-ld に作ってもらう。
-    # これらは isMultithreaded（--shared-memory）のときだけ合成される
-    set(libc_so_extra_link -Wl,--shared-memory)
-  else()
-    set(abi_exports_name libc.exports)
-    set(libc_so_extra_link "")
-  endif()
+  # export の一覧（→ spec.md の 4）。linux-musl はスレッド版だけなので 1 つ
+  set(abi_exports_name libc.exports)
+  # スレッド版は TLS（__wasm_init_tls・__tls_size・__tls_align）を wasm-ld に作ってもらう。
+  # これらは isMultithreaded（--shared-memory）のときだけ合成される
+  set(libc_so_extra_link -Wl,--shared-memory)
   add_custom_command(
     OUTPUT ${SYSROOT_LIB}/libc.so ${SYSROOT_LIB}/libc.asyncify-onlylist
     COMMAND ${CMAKE_COMMAND} -E make_directory ${SYSROOT_LIB} ${SYSROOT_SHARE}
