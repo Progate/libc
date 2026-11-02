@@ -56,6 +56,7 @@
 #include <linux/libc-compat.h>
 #include <linux/neighbour.h>
 #include <linux/netlink.h>
+#include <linux/perf_event.h>
 #include <linux/rtnetlink.h>
 #include <linux/socket.h>
 #include <linux/sockios.h>
