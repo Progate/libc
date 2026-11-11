@@ -314,9 +314,9 @@ else()
 endif()
 
 if(LINUX_MUSL)
-  # musl と同じ分だけ（dlopen・pthread などは libc の中にあるので、-ldl・-lpthread は空の stub。
-  # libwasi-emulated-*・libc-printscan-* のようなこの OS 特有のものは持たない）
-  set(empty_libs m pthread dl rt util xnet crypt)
+  # musl と同じ分だけ（musl の Makefile の EMPTY_LIB_NAMES。dlopen・pthread・res_* などは libc の中にあるので、
+  # -ldl・-lpthread・-lresolv は空の stub。libwasi-emulated-*・libc-printscan-* のようなこの OS 特有のものは持たない）
+  set(empty_libs m rt pthread crypt util xnet resolv dl)
 else()
   # 空のライブラリ（musl は libc.a に全部を持つ。-lm などを付けて組むプログラムのため）
   set(empty_libs m rt pthread crypt util xnet resolv dl c-printscan-long-double c-printscan-no-floating-point
