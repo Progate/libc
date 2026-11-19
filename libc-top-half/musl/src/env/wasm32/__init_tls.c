@@ -1,9 +1,11 @@
 /* BrowserOS: スレッドローカルの領域とスレッドポインタ（musl の src/env/__init_tls.c と同じ口）。
  *
  * wasm のスレッドローカル変数は、__tls_base が指す領域にコンパイラが置く（ELF の PT_TLS は無い）。
- * スレッドの struct pthread も、その領域の中の __browseros_pthread_self に置き、スレッドポインタは
- * その番地にする（→ arch/wasm32/pthread_arch.h）。新しいスレッドの領域は __wasm_init_tls が初めの
- * 値で埋める。1 本の版ではスレッドローカル変数はただの大域変数で、スレッドは作れない。 */
+ * スレッドポインタは、そのスレッドの struct pthread を指す TLS 変数 __browseros_pthread_self に置く
+ * （→ arch/wasm32/pthread_arch.h）。struct pthread そのものは TLS の雛形の外に置く —— 主スレッドのものは
+ * 大域変数、新しいスレッドのものは静的 TLS の区画のすぐ後ろ。新しいスレッドの区画は、そのスレッドが走り始めると
+ * __wasm_init_tls が雛形の初めの値で埋めるので、雛形の中に置くと、親が clone のあとで書いた中身（スレッドの一覧の
+ * 繋がり・detach の状態）が消える。1 本の版ではスレッドローカル変数はただの大域変数で、スレッドは作れない。 */
 
 #include <limits.h>
 #include <string.h>
@@ -18,10 +20,14 @@
 __attribute__((__visibility__("hidden")))
 volatile int __thread_list_lock;
 
-/* libc の中だけの TLS（clone.c が新しいスレッドに置く先にも使う）。外に見せると
- * 動的な TLS（GOT 経由）の解決が要るので hidden にしてモジュール内の local-exec に留める */
+/* 主スレッドの struct pthread */
+static struct pthread main_thread;
+
+/* libc の中だけの TLS（clone.c の子の入口も置く）。外に見せると動的な TLS（GOT 経由）の解決が
+ * 要るので hidden にしてモジュール内の local-exec に留める。初めの値は主スレッドのもので、__init_tls より
+ * 前に errno などを触っても 0 番地を書かない。新しいスレッドは、走り始めるときに自分のものへ置き直す */
 __attribute__((__visibility__("hidden")))
-_Thread_local struct pthread __browseros_pthread_self;
+_Thread_local struct pthread *__browseros_pthread_self = &main_thread;
 
 /* 動的に読むスレッドローカル（__tls_get_addr）は使わない。dtv は数だけ持つ */
 static uintptr_t dtv[1];
@@ -47,7 +53,11 @@ int __init_tp(void *p)
 #ifdef _REENTRANT
 void __wasm_init_tls(void *);
 
+/* 静的 TLS の区画の頭から、そのスレッドの struct pthread までの距離（→ static_init_tls） */
+static size_t tls_block_span;
+
 /* mem から libc.tls_size バイトに新しいスレッドの領域を作り、その struct pthread を返す。
+ * 並びは [静的 TLS の区画][struct pthread] で、区画の頭は libc.tls_align に揃える。
  * .tdata の中身の写しと TLS の番地を差す GOT.data エントリの再配置（__wasm_init_tls がやる
  * 仕事）は、新しいスレッドの側の wasi_thread_start がそのスレッドのインスタンスで走らせる
  * （→ src/thread/wasm32/wasi_thread_start.s）。こちらのインスタンスで走らせると GOT.data が
@@ -56,17 +66,22 @@ void *__copy_tls(unsigned char *mem)
 {
 	/* 動的な道では libc.tls_align はローダーの static_tls が答えた全区画の揃え（→ static_tls_dyld.c） */
 	size_t align = libc.tls_align;
-	void *current = __builtin_wasm_tls_base();
-	size_t offset = (char *)&__browseros_pthread_self - (char *)current;
 	mem += -(uintptr_t)mem & (align - 1);
-	pthread_t td = (pthread_t)(mem + offset);
+	pthread_t td = (pthread_t)(mem + tls_block_span);
 	td->dtv = dtv;
 	return td;
+}
+
+/* struct pthread（__copy_tls が返したもの）から、そのスレッドの静的 TLS の区画の頭を返す（→ clone.c） */
+__attribute__((__visibility__("hidden")))
+void *__browseros_tls_block(void *td)
+{
+	return (char *)td - tls_block_span;
 }
 #else
 void *__copy_tls(unsigned char *mem)
 {
-	pthread_t td = &__browseros_pthread_self;
+	pthread_t td = &main_thread;
 	td->dtv = dtv;
 	return td;
 }
@@ -87,7 +102,14 @@ void __browseros_static_tls(size_t *size, size_t *align)
 static void static_init_tls(size_t *aux)
 {
 #ifdef _REENTRANT
-	__browseros_static_tls(&libc.tls_size, &libc.tls_align);
+	size_t size, align;
+	__browseros_static_tls(&size, &align);
+	/* size は区画の大きさに揃えのずれのぶん（align）を足したもの。struct pthread は区画のすぐ後ろに、
+	 * その揃えで置く（→ __copy_tls） */
+	size_t pthread_align = _Alignof(struct pthread);
+	tls_block_span = (size - align + pthread_align - 1) & -pthread_align;
+	libc.tls_align = align;
+	libc.tls_size = align + tls_block_span + sizeof(struct pthread);
 	/* start 関数の __wasm_init_memory は主スレッドの __tls_base と .tdata/.tbss を用意するが、
 	 * TLS の番地を差す GOT.data エントリ（__tls_base + offset への再配置）は __wasm_init_tls
 	 * の中にだけある。主スレッドの区画にも 1 度走らせないと、GOT 経由で TLS を読むコード
@@ -96,7 +118,8 @@ static void static_init_tls(size_t *aux)
 	__wasm_init_tls(__builtin_wasm_tls_base());
 #endif
 	libc.tls_cnt = 1;
-	pthread_t td = &__browseros_pthread_self;
+	pthread_t td = &main_thread;
+	__browseros_pthread_self = td;
 	td->dtv = dtv;
 	/* スレッドポインタを置けないのは致命的 */
 	if (__init_tp(td) < 0)
