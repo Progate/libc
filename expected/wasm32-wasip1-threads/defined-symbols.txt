@@ -555,10 +555,12 @@ _fini
 _flushlbf
 _init
 _initialize
+_initialize_c
 _ns_flagdata
 _pthread_cleanup_pop
 _pthread_cleanup_push
 _start
+_start_c
 a64l
 abort
 abs

@@ -1,3 +1,6 @@
+#define START "_start"
+
+#include "crt_arch.h"
 #include "crt_start.h"
 
 #ifdef __wasi__
@@ -17,14 +20,13 @@ static int call_main(int argc, char **argv, char **envp)
 	return __main_argc_argv(argc, argv);
 }
 
-__attribute__((__export_name__("_start")))
-void _start(void)
+hidden void _start_c(long *p)
 {
 #ifdef CRT_STATIC_PIE
 	/* 静的な PIE（rcrt1.o）はローダーを通らないので、data の再配置を自分で当てる */
 	__wasm_apply_data_relocs();
 #endif
-	int argc;
-	char **argv = build_start_block(&argc);
+	int argc = p[0];
+	char **argv = (void *)(p+1);
 	__libc_start_main(call_main, argc, argv, 0, 0, 0);
 }
